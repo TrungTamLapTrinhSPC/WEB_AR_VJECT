@@ -1,0 +1,2004 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PA3 Admin Panel</title>
+<link rel="preconnect" href="https://images.unsplash.com">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --p:#4A90E2;--pd:#2C6BB8;--pl:#E3F2FD;
+  --a:#FF9800;--s:#22C55E;--w:#F59E0B;--d:#EF4444;
+  --bg:#F5F7FA;--card:#FFFFFF;--tx:#1F2937;--tx2:#6B7280;
+  --bd:#E5E7EB;--bdl:#F3F4F6;
+  --sh:0 1px 3px rgba(0,0,0,.06);
+  --shl:0 4px 16px rgba(0,0,0,.1);
+  --shxl:0 12px 40px rgba(0,0,0,.15);
+}
+html,body{height:100%}
+body{font-family:-apple-system,"Segoe UI","Noto Sans JP",Roboto,Arial,sans-serif;
+  background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5;overflow:hidden}
+
+.layout{display:grid;grid-template-columns:240px 1fr;grid-template-rows:60px 1fr;height:100vh}
+.header{grid-column:1/3;grid-row:1;background:var(--card);border-bottom:1px solid var(--bd);
+  display:flex;align-items:center;padding:0 24px;gap:20px;z-index:100;box-shadow:var(--sh)}
+.sidebar{grid-column:1;grid-row:2;background:var(--card);border-right:1px solid var(--bd);
+  overflow-y:auto;padding:16px 0}
+.main{grid-column:2;grid-row:2;overflow-y:auto;padding:24px 32px 60px}
+
+.brand{display:flex;align-items:center;gap:10px;min-width:200px;text-decoration:none;color:var(--tx)}
+.brand-logo{width:36px;height:36px;background:linear-gradient(135deg,var(--p),var(--pd));
+  border-radius:9px;display:flex;align-items:center;justify-content:center;
+  color:white;font-weight:900;font-size:16px}
+.brand-name{font-weight:700;font-size:15px;letter-spacing:-0.2px}
+.brand-sub{font-size:11px;color:var(--tx2);font-weight:500}
+.h-search{flex:1;max-width:520px;position:relative}
+.h-search input{width:100%;padding:9px 14px 9px 38px;border:1px solid var(--bd);
+  border-radius:8px;font-size:13px;background:#F9FAFB;font-family:inherit;transition:all .15s}
+.h-search input:focus{outline:none;border-color:var(--p);background:white;
+  box-shadow:0 0 0 3px rgba(74,144,226,.1)}
+.h-search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx2)}
+.h-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+.h-btn{background:none;border:none;padding:8px;border-radius:8px;cursor:pointer;color:var(--tx2);
+  position:relative;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.h-btn:hover{background:var(--pl);color:var(--pd)}
+.h-badge{position:absolute;top:4px;right:4px;background:var(--d);color:white;font-size:10px;
+  padding:1px 5px;border-radius:8px;font-weight:700;min-width:16px;text-align:center}
+.lang{display:flex;background:var(--bdl);border-radius:8px;padding:2px;gap:2px}
+.lang button{padding:5px 10px;background:transparent;border:none;color:var(--tx2);cursor:pointer;
+  border-radius:6px;font-size:12px;font-weight:600;font-family:inherit;transition:all .15s}
+.lang button.on{background:white;color:var(--pd);box-shadow:var(--sh)}
+.h-user{display:flex;align-items:center;gap:10px;padding:6px 12px 6px 6px;border-radius:24px;
+  cursor:pointer;transition:background .15s;margin-left:4px}
+.h-user:hover{background:var(--bdl)}
+.avatar{width:32px;height:32px;background:linear-gradient(135deg,var(--p),var(--pd));
+  color:white;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:12px;flex-shrink:0}
+.h-user-name{font-size:13px;font-weight:600}
+.h-user-role{font-size:11px;color:var(--tx2)}
+
+.nav-section{padding:14px 20px 6px;font-size:11px;font-weight:700;color:var(--tx2);
+  text-transform:uppercase;letter-spacing:.6px}
+.nav-item{display:flex;align-items:center;gap:12px;padding:9px 20px;color:var(--tx);
+  cursor:pointer;text-decoration:none;font-size:13px;font-weight:500;border-left:3px solid transparent;
+  transition:all .15s}
+.nav-item:hover{background:var(--bdl);color:var(--pd)}
+.nav-item.on{background:var(--pl);color:var(--pd);border-left-color:var(--p);font-weight:600}
+.nav-item svg{flex-shrink:0}
+.nav-item .badge{margin-left:auto;background:var(--d);color:white;font-size:10px;
+  padding:2px 6px;border-radius:10px;font-weight:700}
+.nav-item .badge.info{background:var(--p)}
+
+.page{display:none;animation:fade .2s}
+.page.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:16px;flex-wrap:wrap}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-0.3px}
+.page-sub{font-size:13px;color:var(--tx2);margin-top:2px}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--bd);
+  background:white;color:var(--tx);border-radius:7px;font-size:13px;font-weight:600;
+  cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
+.btn:hover{background:var(--bdl);border-color:#D1D5DB}
+.btn-p{background:var(--p);color:white;border-color:var(--p)}
+.btn-p:hover{background:var(--pd);border-color:var(--pd)}
+.btn-d{background:var(--d);color:white;border-color:var(--d)}
+.btn-d:hover{background:#B91C1C}
+.btn-s{background:var(--s);color:white;border-color:var(--s)}
+.btn-s:hover{background:#15803D}
+.btn-ghost{border:none;background:transparent;color:var(--tx2);padding:6px 8px}
+.btn-ghost:hover{background:var(--bdl);color:var(--tx)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-icon{padding:6px;width:32px;height:32px;justify-content:center;border:none;background:transparent;color:var(--tx2)}
+.btn-icon:hover{background:var(--bdl);color:var(--tx)}
+
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.stat{background:var(--card);border-radius:12px;padding:16px 18px;border:1px solid var(--bd);
+  display:flex;justify-content:space-between;align-items:flex-start}
+.stat-info .lbl{font-size:12px;color:var(--tx2);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.stat-info .val{font-size:26px;font-weight:800;margin-top:4px;letter-spacing:-0.5px}
+.stat-info .chg{font-size:12px;margin-top:4px;color:var(--s);font-weight:600}
+.stat-info .chg.dn{color:var(--d)}
+.stat-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;background:var(--pl);color:var(--pd);flex-shrink:0}
+.stat-icon.orange{background:#FFF3E0;color:var(--a)}
+.stat-icon.green{background:#DCFCE7;color:var(--s)}
+.stat-icon.red{background:#FEE2E2;color:var(--d)}
+.stat-icon.purple{background:#F3E8FF;color:#7C3AED}
+
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:20px;margin-bottom:16px}
+.card-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px}
+.card-title{font-size:15px;font-weight:700}
+.card-sub{font-size:12px;color:var(--tx2)}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:900px){.grid-2,.grid-3{grid-template-columns:1fr}}
+
+.toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center}
+.toolbar .search{flex:1;min-width:220px;position:relative}
+.toolbar .search input{width:100%;padding:8px 14px 8px 36px;border:1px solid var(--bd);
+  border-radius:8px;font-size:13px;background:white;font-family:inherit}
+.toolbar .search input:focus{outline:none;border-color:var(--p)}
+.toolbar .search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--tx2)}
+.select{padding:8px 30px 8px 12px;border:1px solid var(--bd);border-radius:8px;
+  background:white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>") right 10px center no-repeat;
+  appearance:none;font-size:13px;font-family:inherit;cursor:pointer;color:var(--tx)}
+.select:focus{outline:none;border-color:var(--p)}
+
+.table-wrap{background:var(--card);border:1px solid var(--bd);border-radius:12px;overflow:hidden}
+.table{width:100%;border-collapse:collapse;font-size:13px}
+.table th{background:#F9FAFB;padding:11px 14px;text-align:left;font-weight:600;
+  color:var(--tx2);font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+  border-bottom:1px solid var(--bd);white-space:nowrap}
+.table td{padding:12px 14px;border-bottom:1px solid var(--bdl);vertical-align:middle}
+.table tr:last-child td{border-bottom:none}
+.table tr:hover td{background:#F9FAFB}
+.table .row-actions{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.table tr:hover .row-actions{opacity:1}
+.thumb{width:48px;height:48px;border-radius:8px;overflow:hidden;background:var(--bdl);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.td-primary{font-weight:600;color:var(--tx)}
+.td-flex{display:flex;align-items:center;gap:10px}
+
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:12px;
+  font-size:11px;font-weight:600;white-space:nowrap}
+.chip-blue{background:var(--pl);color:var(--pd)}
+.chip-green{background:#DCFCE7;color:#166534}
+.chip-yellow{background:#FEF3C7;color:#92400E}
+.chip-red{background:#FEE2E2;color:#991B1B}
+.chip-gray{background:var(--bdl);color:var(--tx2)}
+.chip-orange{background:#FFEDD5;color:#9A3412}
+.chip-purple{background:#F3E8FF;color:#6B21A8}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+.prio{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.prio-low{background:#DBEAFE;color:#1E40AF}
+.prio-med{background:#FEF3C7;color:#92400E}
+.prio-hi{background:#FFEDD5;color:#9A3412}
+.prio-cr{background:#FEE2E2;color:#991B1B}
+
+.overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;
+  align-items:center;justify-content:center;z-index:1000;padding:20px;
+  backdrop-filter:blur(3px);animation:fade .15s}
+.overlay.on{display:flex}
+.modal{background:var(--card);border-radius:14px;max-width:640px;width:100%;
+  max-height:90vh;display:flex;flex-direction:column;box-shadow:var(--shxl);
+  animation:pop .2s}
+.modal.lg{max-width:1000px}
+.modal.xl{max-width:1200px}
+@keyframes pop{from{transform:scale(.96) translateY(10px);opacity:0}to{transform:scale(1) translateY(0);opacity:1}}
+.modal-hd{padding:18px 24px;border-bottom:1px solid var(--bd);display:flex;
+  align-items:center;justify-content:space-between}
+.modal-title{font-size:16px;font-weight:700}
+.modal-sub{font-size:12px;color:var(--tx2);margin-top:2px}
+.modal-close{width:32px;height:32px;border:none;background:var(--bdl);border-radius:50%;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--tx2)}
+.modal-close:hover{background:#E5E7EB;color:var(--tx)}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-ft{padding:14px 24px;border-top:1px solid var(--bd);display:flex;
+  justify-content:flex-end;gap:8px;background:#F9FAFB;border-radius:0 0 14px 14px}
+
+.form-row{margin-bottom:16px}
+.form-row-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}
+.form-label{display:block;font-size:12px;font-weight:600;margin-bottom:6px;color:var(--tx)}
+.form-label .req{color:var(--d);margin-left:2px}
+.form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;border:1px solid var(--bd);
+  border-radius:8px;font-size:13px;background:white;font-family:inherit;transition:border-color .15s}
+.form-input:focus,.form-select:focus,.form-textarea:focus{outline:none;border-color:var(--p);
+  box-shadow:0 0 0 3px rgba(74,144,226,.1)}
+.form-textarea{resize:vertical;min-height:80px}
+.form-hint{font-size:11px;color:var(--tx2);margin-top:4px}
+.form-select{padding-right:34px;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-position:right 12px center;background-repeat:no-repeat;appearance:none;cursor:pointer}
+
+.upload{border:2px dashed var(--bd);border-radius:10px;padding:24px;text-align:center;
+  cursor:pointer;transition:all .15s;background:#F9FAFB}
+.upload:hover{border-color:var(--p);background:var(--pl)}
+.upload .u-icon{color:var(--p);margin-bottom:10px}
+.upload .u-text{font-size:13px;font-weight:600;color:var(--tx)}
+.upload .u-hint{font-size:12px;color:var(--tx2);margin-top:4px}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:12px}
+.preview-item{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;background:var(--bdl);
+  border:1px solid var(--bd)}
+.preview-item img{width:100%;height:100%;object-fit:cover}
+.preview-item .del{position:absolute;top:4px;right:4px;width:22px;height:22px;background:rgba(0,0,0,.6);
+  color:white;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.preview-item .del:hover{background:var(--d)}
+
+.toggle{width:38px;height:22px;background:var(--bd);border-radius:11px;position:relative;
+  cursor:pointer;transition:background .15s;flex-shrink:0}
+.toggle.on{background:var(--p)}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
+  background:white;border-radius:50%;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.toggle.on::after{transform:translateX(16px)}
+.check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px}
+.check input{width:16px;height:16px;accent-color:var(--p);cursor:pointer}
+
+.toast-wrap{position:fixed;top:76px;right:20px;z-index:2000;display:flex;flex-direction:column;gap:10px}
+.toast{background:white;padding:12px 16px 12px 12px;border-radius:10px;box-shadow:var(--shxl);
+  display:flex;align-items:center;gap:10px;min-width:280px;border-left:3px solid var(--s);animation:slideIn .2s}
+.toast.err{border-left-color:var(--d)} .toast.info{border-left-color:var(--p)} .toast.warn{border-left-color:var(--w)}
+.toast-icon{width:28px;height:28px;border-radius:50%;background:#DCFCE7;color:var(--s);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.toast.err .toast-icon{background:#FEE2E2;color:var(--d)}
+.toast.info .toast-icon{background:var(--pl);color:var(--pd)}
+.toast.warn .toast-icon{background:#FEF3C7;color:var(--w)}
+.toast-text{flex:1;font-size:13px;font-weight:500}
+@keyframes slideIn{from{transform:translateX(20px);opacity:0}to{transform:translateX(0);opacity:1}}
+
+.bim-detail{display:grid;grid-template-columns:1.2fr 1fr;gap:24px}
+@media (max-width:900px){.bim-detail{grid-template-columns:1fr}}
+.gallery{display:grid;grid-template-columns:1fr;gap:10px}
+.gallery-main{aspect-ratio:16/10;background:var(--bdl);border-radius:10px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;position:relative;border:1px solid var(--bd)}
+.gallery-main img{width:100%;height:100%;object-fit:cover}
+.gallery-thumbs{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.gallery-thumbs .t{aspect-ratio:1;background:var(--bdl);border-radius:6px;overflow:hidden;
+  cursor:pointer;border:2px solid transparent;position:relative}
+.gallery-thumbs .t img{width:100%;height:100%;object-fit:cover}
+.gallery-thumbs .t.on{border-color:var(--p)}
+.gallery-thumbs .t:hover{border-color:var(--pd)}
+
+.timeline{position:relative}
+.timeline::before{content:"";position:absolute;left:15px;top:12px;bottom:12px;width:2px;background:var(--bd)}
+.tl-item{display:flex;gap:14px;padding:12px 0;position:relative}
+.tl-icon{width:32px;height:32px;background:var(--pl);color:var(--pd);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1;border:3px solid white}
+.tl-icon.warn{background:#FEF3C7;color:var(--w)}
+.tl-icon.err{background:#FEE2E2;color:var(--d)}
+.tl-icon.ok{background:#DCFCE7;color:var(--s)}
+.tl-body{flex:1;background:#F9FAFB;border:1px solid var(--bd);border-radius:10px;padding:12px 14px}
+.tl-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap}
+.tl-user{font-weight:600;font-size:13px;display:flex;align-items:center;gap:8px}
+.tl-user .avatar{width:22px;height:22px;font-size:10px}
+.tl-time{font-size:11px;color:var(--tx2)}
+.tl-msg{font-size:13px;color:var(--tx);margin-bottom:8px;line-height:1.5}
+.tl-attach{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.tl-attach .att{width:70px;height:70px;background:var(--bdl);border-radius:6px;overflow:hidden;
+  cursor:pointer;position:relative;border:1px solid var(--bd);flex-shrink:0}
+.tl-attach .att img{width:100%;height:100%;object-fit:cover}
+.tl-meta{display:flex;gap:12px;font-size:11px;color:var(--tx2);margin-top:8px;padding-top:8px;
+  border-top:1px dashed var(--bd);flex-wrap:wrap;align-items:center}
+.tl-meta span{display:flex;align-items:center;gap:3px}
+
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media (max-width:900px){.board{grid-template-columns:1fr 1fr}}
+.col{background:#F9FAFB;border-radius:10px;padding:12px}
+.col-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding:0 4px}
+.col-title{font-size:13px;font-weight:700}
+.col-count{background:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;
+  color:var(--tx2);border:1px solid var(--bd)}
+.col-card{background:white;border:1px solid var(--bd);border-radius:8px;padding:10px 12px;
+  margin-bottom:8px;cursor:pointer;transition:all .15s}
+.col-card:hover{border-color:var(--p);box-shadow:var(--sh);transform:translateY(-1px)}
+.col-card .cc-title{font-size:13px;font-weight:600;margin-bottom:6px;line-height:1.4}
+.col-card .cc-meta{display:flex;gap:8px;font-size:11px;color:var(--tx2);align-items:center}
+
+.info-list{list-style:none}
+.info-list li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--bd);font-size:13px;gap:12px}
+.info-list li:last-child{border-bottom:none}
+.info-list li span{color:var(--tx2)}
+.info-list li b{color:var(--tx);font-weight:600;text-align:right}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--bd);margin-bottom:16px;overflow-x:auto}
+.tab{padding:9px 14px;background:none;border:none;font-size:13px;font-weight:600;
+  color:var(--tx2);cursor:pointer;border-bottom:2px solid transparent;font-family:inherit;
+  margin-bottom:-1px;transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--tx)}
+.tab.on{color:var(--p);border-bottom-color:var(--p)}
+.tab-panel{display:none}
+.tab-panel.on{display:block}
+
+.mb-16{margin-bottom:16px} .mb-8{margin-bottom:8px}
+.text-c{text-align:center} .text-r{text-align:right}
+.flex{display:flex} .flex-c{display:flex;align-items:center} .flex-b{display:flex;justify-content:space-between;align-items:center}
+.gap-8{gap:8px} .gap-12{gap:12px}
+.mt-8{margin-top:8px} .mt-16{margin-top:16px}
+.text-sm{font-size:12px;color:var(--tx2)}
+</style>
+</head>
+<body>
+
+<!-- DUOTONE ICONS (Phosphor-inspired: fill + stroke) -->
+<svg style="display:none">
+<defs>
+<symbol id="i-home" viewBox="0 0 24 24"><path d="M5 10.5 12 4l7 6.5V20a1 1 0 0 1-1 1h-3v-6h-6v6H6a1 1 0 0 1-1-1z" fill="currentColor" opacity=".25"/><path d="M3 12l9-8 9 8M5 10v10h4v-6h6v6h4V10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><path d="M5 21V7l7-4 7 4v14z" fill="currentColor" opacity=".25"/><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M9 12h.01M9 15h.01M9 18h.01M15 9h.01M15 12h.01M15 15h.01M15 18h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 3 3 7.5V16l9 5 9-5V7.5z" fill="currentColor" opacity=".25"/><path d="M12 3 3 7.5 12 12l9-4.5zM3 7.5V16l9 5V12M21 7.5V16l-9 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+<symbol id="i-qr" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" fill="currentColor" opacity=".25" rx="1"/><rect x="14" y="3" width="7" height="7" fill="currentColor" opacity=".25" rx="1"/><rect x="3" y="14" width="7" height="7" fill="currentColor" opacity=".25" rx="1"/><rect x="3" y="3" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.8" rx="1"/><rect x="14" y="3" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.8" rx="1"/><rect x="3" y="14" width="7" height="7" fill="none" stroke="currentColor" stroke-width="1.8" rx="1"/><path d="M14 14h3v3h-3zM17 17h4M17 20h4M14 20h1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M12 22s8-6 8-13a8 8 0 1 0-16 0c0 7 8 13 8 13z" fill="currentColor" opacity=".25"/><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1 1 16 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="10" r="3" fill="white" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M21 5a5 5 0 0 1-7 5l-8 8a2 2 0 0 1-3-3l8-8a5 5 0 0 1 5-7l-3 3v3h3z" fill="currentColor" opacity=".25"/><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 5v10a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="currentColor" opacity=".25"/><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4" fill="currentColor" opacity=".25"/><path d="M1 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2" fill="currentColor" opacity=".25"/><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+<symbol id="i-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".25"/><circle cx="12" cy="12" r="3" fill="white" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" opacity=".25"/><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M12 7v5l4 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9z" fill="currentColor" opacity=".25"/><path d="M18 8A6 6 0 1 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" fill="currentColor" opacity=".2"/><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".15"/><line x1="12" y1="7" x2="12" y2="17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><line x1="7" y1="12" x2="17" y2="12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" fill="currentColor" opacity=".2"/><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M5 6h14v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="currentColor" opacity=".2"/><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="currentColor" opacity=".2"/><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="currentColor"/></symbol>
+<symbol id="i-upload" viewBox="0 0 24 24"><path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4z" fill="currentColor" opacity=".2"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4z" fill="currentColor" opacity=".2"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".2"/><polyline points="8 12 11 15 16 9" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="currentColor" opacity=".25"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".25"/><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 16v-4M12 8h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="currentColor" opacity=".2"/><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><polyline points="21 15 16 10 5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" fill="currentColor" opacity=".2"/><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM13 2v7h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".25"/><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/><polyline points="12 6 12 12 16 14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="currentColor" opacity=".2"/><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="white" stroke="currentColor" stroke-width="1.8"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" fill="currentColor" opacity=".2"/><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+<symbol id="i-tag" viewBox="0 0 24 24"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" fill="currentColor" opacity=".2"/><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4z" fill="currentColor" opacity=".2"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M23 4v6h-6M1 20v-6h6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor" opacity=".25" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" fill="currentColor" opacity=".2"/><rect x="2" y="4" width="20" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><polyline points="22 6 12 13 2 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor" opacity=".2"/><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="2" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="1.8"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+</defs>
+</svg>
+
+<div class="layout">
+<header class="header">
+  <a href="#" class="brand" onclick="go('dashboard');return false">
+    <div class="brand-logo">R</div>
+    <div>
+      <div class="brand-name">PA3 Admin</div>
+      <div class="brand-sub" data-t="brand_sub">Hybrid AR Management</div>
+    </div>
+  </a>
+  <div class="h-search">
+    <svg width="16" height="16"><use href="#i-search"/></svg>
+    <input type="text" data-t-attr="placeholder:h_search">
+  </div>
+  <div class="h-actions">
+    <div class="lang">
+      <button class="on" data-lang="vi" onclick="setLang('vi')">VI</button>
+      <button data-lang="en" onclick="setLang('en')">EN</button>
+      <button data-lang="ja" onclick="setLang('ja')">JA</button>
+    </div>
+    <button class="h-btn" onclick="toast('info',t('coming_soon'))">
+      <svg width="20" height="20"><use href="#i-bell"/></svg>
+      <span class="h-badge">3</span>
+    </button>
+    <div class="h-user" onclick="openModal('m-profile')">
+      <div class="avatar">AT</div>
+      <div>
+        <div class="h-user-name">Anh Tuấn</div>
+        <div class="h-user-role" data-t="role_admin">Quản trị viên</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<aside class="sidebar">
+  <div class="nav-section" data-t="nav_main">CHÍNH</div>
+  <a class="nav-item on" id="n-dashboard" onclick="go('dashboard')">
+    <svg width="18" height="18"><use href="#i-home"/></svg><span data-t="nav_dashboard">Bảng điều khiển</span>
+  </a>
+  <a class="nav-item" id="n-projects" onclick="go('projects')">
+    <svg width="18" height="18"><use href="#i-building"/></svg><span data-t="nav_projects">Dự án</span><span class="badge info">4</span>
+  </a>
+
+  <div class="nav-section" data-t="nav_content">NỘI DUNG</div>
+  <a class="nav-item" id="n-bim" onclick="go('bim')">
+    <svg width="18" height="18"><use href="#i-cube"/></svg><span data-t="nav_bim">Mô hình BIM</span>
+  </a>
+  <a class="nav-item" id="n-qr" onclick="go('qr')">
+    <svg width="18" height="18"><use href="#i-qr"/></svg><span data-t="nav_qr">QR Markers</span>
+  </a>
+  <a class="nav-item" id="n-gps" onclick="go('gps')">
+    <svg width="18" height="18"><use href="#i-map-pin"/></svg><span data-t="nav_gps">GPS POIs</span>
+  </a>
+  <a class="nav-item" id="n-elements" onclick="go('elements')">
+    <svg width="18" height="18"><use href="#i-wrench"/></svg><span data-t="nav_elements">Cấu kiện M&E</span>
+  </a>
+
+  <div class="nav-section" data-t="nav_ops">VẬN HÀNH</div>
+  <a class="nav-item" id="n-feedback" onclick="go('feedback')">
+    <svg width="18" height="18"><use href="#i-chat"/></svg><span data-t="nav_feedback">Phản hồi</span><span class="badge">12</span>
+  </a>
+  <a class="nav-item" id="n-users" onclick="go('users')">
+    <svg width="18" height="18"><use href="#i-users"/></svg><span data-t="nav_users">Người dùng</span>
+  </a>
+
+  <div class="nav-section" data-t="nav_system">HỆ THỐNG</div>
+  <a class="nav-item" id="n-settings" onclick="go('settings')">
+    <svg width="18" height="18"><use href="#i-cog"/></svg><span data-t="nav_settings">Cài đặt</span>
+  </a>
+  <a class="nav-item" id="n-audit" onclick="go('audit')">
+    <svg width="18" height="18"><use href="#i-history"/></svg><span data-t="nav_audit">Nhật ký</span>
+  </a>
+</aside>
+
+<main class="main" id="main"></main>
+</div>
+
+<div id="modals"></div>
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+// ============ FULL i18n DICT ============
+const I18N={
+vi:{
+  brand_sub:"Hybrid AR Management",h_search:"Tìm dự án, mô hình, cấu kiện, feedback...",
+  role_admin:"Quản trị viên",coming_soon:"Chức năng đang phát triển",
+  nav_main:"CHÍNH",nav_content:"NỘI DUNG",nav_ops:"VẬN HÀNH",nav_system:"HỆ THỐNG",
+  nav_dashboard:"Bảng điều khiển",nav_projects:"Dự án",nav_bim:"Mô hình BIM",
+  nav_qr:"QR Markers",nav_gps:"GPS POIs",nav_elements:"Cấu kiện M&E",
+  nav_feedback:"Phản hồi",nav_users:"Người dùng",nav_settings:"Cài đặt",nav_audit:"Nhật ký",
+  // Common actions
+  edit:"Sửa",delete:"Xoá",view:"Xem",new_:"Tạo mới",cancel:"Huỷ",save:"Lưu",save_changes:"Lưu thay đổi",
+  submit:"Gửi",close:"Đóng",filter:"Lọc",all:"Tất cả",refresh:"Làm mới",export_:"Xuất báo cáo",
+  saved:"Đã lưu thành công",deleted:"Đã xoá",created:"Đã tạo mới",
+  yes:"Có",no:"Không",search:"Tìm kiếm...",more:"Thêm",add:"Thêm",remove:"Xoá",
+  // Dashboard
+  dash_title:"Bảng điều khiển",dash_sub:"Tổng quan hệ thống PA3 Hybrid AR",
+  dash_st1:"Dự án hoạt động",dash_st2:"Mô hình BIM",dash_st3:"QR Markers",
+  dash_st4:"Phản hồi đang mở",dash_st5:"Kỹ sư đang online",
+  dash_this_week:"tuần này",dash_today:"hôm nay",dash_ago:"trước",
+  dash_recent_fb:"Feedback gần đây",dash_recent_fb_sub:"5 phản hồi mới nhất từ hiện trường",
+  dash_bim_act:"Hoạt động BIM",dash_bim_act_sub:"Upload mô hình mới nhất",
+  dash_view_all:"Xem tất cả",
+  dash_fb_trend:"Xu hướng feedback theo tuần",
+  dash_fb_trend_note:"Xu hướng feedback tăng đều → cần bổ sung nhân sự BQL",
+  dash_prio_dist:"Phân bổ ưu tiên",
+  dash_user_act:"Hoạt động user",
+  prio_critical:"Khẩn cấp",prio_high:"Cao",prio_medium:"Trung",prio_low:"Thấp",
+  // Projects
+  prj_title:"Quản lý dự án",prj_sub:"Danh sách các công trình trong hệ thống",
+  prj_new:"Tạo dự án mới",prj_search:"Tìm dự án theo tên, mã, địa chỉ...",
+  prj_filter_status:"Tất cả trạng thái",prj_filter_adv:"Lọc nâng cao",
+  prj_st_active:"Đang triển khai",prj_st_uat:"UAT",prj_st_plan:"Kế hoạch",prj_st_archive:"Đã lưu trữ",
+  prj_qr:"QR",prj_poi:"POI",prj_open:"Mở",prj_bim:"BIM",
+  // BIM
+  bim_title:"Quản lý mô hình BIM",bim_sub:"Danh sách BIM đã upload, kèm hình preview và ghi chú từ hiện trường AR",
+  bim_upload:"Upload BIM mới",bim_search:"Tìm theo tên mô hình, dự án, phiên bản...",
+  bim_all_proj:"Tất cả dự án",bim_all_type:"Tất cả loại",bim_indoor:"Indoor",bim_outdoor:"Outdoor",
+  bim_active_only:"Chỉ bản active",bim_all_ver:"Bao gồm bản cũ",
+  bim_active:"Active",bim_old:"Cũ",bim_previews:"preview",
+  // QR
+  qr_title:"Quản lý QR Markers",qr_sub:"Các mã QR dán tại công trình để định vị AR trong nhà",
+  qr_new:"Thêm QR marker",qr_import:"Import CSV",qr_search:"Tìm theo mã QR, dự án, tầng...",
+  qr_code:"Mã QR",qr_project:"Dự án",qr_floor:"Tầng / Khu vực",qr_pos:"Vị trí (x,y,z)",
+  qr_size:"Kích thước",qr_installed:"Ngày lắp",
+  qr_st_active:"Hoạt động",qr_st_damaged:"Hỏng",qr_st_removed:"Đã gỡ",
+  qr_all_st:"Tất cả trạng thái",
+  action:"Thao tác",status:"Trạng thái",
+  // GPS
+  gps_title:"Quản lý GPS POIs",gps_sub:"Điểm định vị GPS ngoài trời (hố ga, trạm biến áp, van khoá...)",
+  gps_new:"Thêm POI",gps_search:"Tìm POI...",
+  gps_all_type:"Tất cả loại",gps_manhole:"Hố ga",gps_sub_station:"Trạm biến áp",gps_valve:"Van khoá",
+  gps_name:"Tên",gps_type:"Loại",gps_active:"POI đang hoạt động",gps_inactive:"POI đã dừng",
+  // Elements
+  ele_title:"Cấu kiện M&E",ele_sub:"Danh sách chi tiết cấu kiện trong các mô hình BIM",
+  ele_export:"Xuất Excel",ele_search:"Tìm mã cấu kiện, tên, nhà sản xuất...",
+  ele_all_cat:"Tất cả hệ",ele_all_bim:"Tất cả BIM",
+  ele_electric:"Điện",ele_water:"Nước",ele_hvac:"HVAC",ele_fire:"PCCC",
+  ele_code:"Mã cấu kiện",ele_name:"Tên",ele_cat:"Hệ",ele_bim_model:"Mô hình BIM",
+  ele_maker:"Nhà sản xuất",ele_fb:"Feedback",ele_st_active:"Hoạt động",ele_st_maint:"Bảo trì",
+  // Feedback
+  fb_title:"Quản lý phản hồi",fb_sub:"Phản hồi từ kỹ sư hiện trường gửi qua app AR",
+  fb_new:"Tạo phản hồi",fb_search:"Tìm phản hồi...",
+  fb_all_prio:"Tất cả ưu tiên",fb_all_assignee:"Tất cả người xử lý",
+  fb_board:"Bảng",fb_list:"Danh sách",
+  fb_open:"Mới",fb_inprogress:"Đang xử lý",fb_resolved:"Đã giải quyết",fb_closed:"Đã đóng",
+  fb_empty:"Trống",
+  // Users
+  user_title:"Quản lý người dùng",user_sub:"Danh sách tài khoản hệ thống + phân quyền",
+  user_new:"Thêm người dùng",user_import:"Import CSV",user_search:"Tìm theo tên, email...",
+  user_all_role:"Tất cả vai trò",user_all_st:"Tất cả trạng thái",
+  user_total:"Tổng user",user_active_cnt:"Active",user_engineer_cnt:"Kỹ sư hiện trường",user_partner:"Đối tác Nhật",
+  user_col_user:"Người dùng",user_col_role:"Vai trò",user_col_last:"Đăng nhập gần nhất",
+  user_role_admin:"Quản trị",user_role_eng:"Kỹ sư",user_role_bql:"BQL",user_role_bim:"BIM Tech",user_role_view:"Xem",
+  user_st_active:"Active",user_st_inactive:"Inactive",
+  // Settings
+  set_title:"Cài đặt hệ thống",set_sub:"Cấu hình chung cho toàn bộ PA3 Admin Panel",
+  set_tab_gen:"Chung",set_tab_ar:"AR / Định vị",set_tab_notif:"Thông báo",set_tab_int:"Tích hợp",set_tab_sec:"Bảo mật",
+  set_org:"Thông tin công ty",set_org_name:"Tên tổ chức",set_org_tax:"Mã thuế",
+  set_org_email:"Email hệ thống",set_org_tz:"Múi giờ",set_org_addr:"Địa chỉ",
+  set_lang_def:"Ngôn ngữ mặc định",set_lang_sys:"Ngôn ngữ hệ thống",set_lang_sys_note:"Áp dụng cho toàn bộ giao diện admin",
+  set_lang_report:"Ngôn ngữ báo cáo",set_lang_report_note:"Xuất song ngữ VI + JP cho Suzuki-sama",
+  set_qr_thr:"Ngưỡng định vị QR",set_qr_conf:"Confidence threshold",set_qr_conf_note:"Ngưỡng để chấp nhận QR detect (0-1)",
+  set_qr_timeout:"Timeout mất tracking (s)",set_qr_timeout_note:"Sau bao nhiêu giây mất QR sẽ chuyển GPS",
+  set_qr_extended:"Khoảng cách max Extended Tracking (m)",set_qr_size:"Kích thước QR tối thiểu (cm)",
+  set_gps:"Cấu hình GPS RTK",set_gps_auto:"Auto-switch QR ↔ GPS",set_gps_auto_note:"Tự động chuyển đổi giữa QR và GPS mode",
+  set_gps_rtk:"Bắt buộc RTK Fixed",set_gps_rtk_note:"Chỉ cho phép GPS mode khi RTK Fixed",
+  set_gps_kalman:"Kalman Filter EKF",set_gps_kalman_note:"Bật khi có phase Full",
+  set_notif_ch:"Kênh gửi thông báo",set_notif_push:"Push notification",set_notif_push_note:"FCM cho Android, APNs cho iOS",
+  set_notif_email:"Email",set_notif_email_note:"Gửi qua SMTP AWS SES",
+  set_notif_sms:"SMS (chỉ khẩn cấp)",set_notif_sms_note:"Twilio, ưu tiên KHẨN CẤP",
+  set_int_ext:"Kết nối bên ngoài",set_int_s3:"AWS S3",set_int_ntrip:"NTRIP CORS Vietnam",set_int_dd:"Datadog Monitoring",
+  set_int_connected:"Đã kết nối",set_int_not:"Chưa kết nối",
+  set_sec_pwd:"Chính sách mật khẩu",set_sec_len:"Độ dài tối thiểu",set_sec_exp:"Hết hạn sau (ngày)",
+  set_sec_special:"Bắt buộc ký tự đặc biệt",set_sec_2fa:"2FA cho admin",
+  set_sec_sess:"Session",set_sec_jwt:"JWT expire (giờ)",set_sec_refresh:"Refresh token expire (ngày)",
+  lang_vi:"Tiếng Việt",lang_en:"English",lang_ja:"日本語",
+  tz_vn:"Asia/Ho_Chi_Minh (UTC+7)",tz_jp:"Asia/Tokyo (UTC+9)",
+  // Audit
+  audit_title:"Nhật ký hoạt động",audit_sub:"Ghi lại toàn bộ thao tác quan trọng trong hệ thống (Audit Log)",
+  audit_export:"Xuất CSV",audit_search:"Tìm theo user, IP, action...",
+  audit_all_act:"Tất cả action",audit_time_7:"7 ngày gần nhất",audit_time_30:"30 ngày",audit_time_custom:"Tuỳ chỉnh",
+  audit_time:"Thời gian",audit_user:"Người dùng",audit_action:"Hành động",audit_target:"Đối tượng",audit_result:"Kết quả",
+  audit_ok:"Thành công",audit_err:"Lỗi",
+  // BIM Detail
+  bd_tab_preview:"Preview & Thông tin",bd_tab_feedback:"Ghi chú AR",bd_tab_elements:"Cấu kiện",bd_tab_versions:"Lịch sử phiên bản",
+  bd_preview_note:"Hình preview BIM (không phải viewer 3D)",
+  bd_preview_hint:"💡 Lưu ý: Admin panel chỉ hiển thị ảnh preview để tra cứu nhanh. Xem mô hình 3D thực tế trên app AR di động.",
+  bd_info:"Thông tin mô hình",
+  bd_proj:"Dự án",bd_ver:"Phiên bản",bd_type:"Loại",bd_size:"Kích thước file",bd_fmt:"Format",
+  bd_ele_cnt:"Số cấu kiện",bd_lod:"LOD",bd_uploader:"Người upload",bd_date:"Ngày upload",bd_md5:"MD5",bd_url:"S3 URL",
+  bd_desc:"Mô tả",bd_desc_txt:"Mô hình BIM chi tiết cho Tầng 3 – Tòa A. Bao gồm đầy đủ hệ điện, cấp nước, HVAC, PCCC. Xuất từ Revit 2024.",
+  bd_dl:"Tải Bundle",bd_add_prev:"Thêm preview",
+  bd_notes_title:"Ghi chú & phản hồi từ hiện trường",
+  bd_notes_sub:"Do kỹ sư gửi qua app AR khi phát hiện sai lệch, ghi chú as-built",
+  bd_add_note:"Thêm ghi chú mới (từ admin panel)",bd_photo:"Ảnh",bd_tag_ele:"Tag cấu kiện",bd_send:"Gửi",
+  bd_all_st:"Tất cả trạng thái",bd_newest:"Mới nhất",bd_oldest:"Cũ nhất",bd_prio_hi:"Ưu tiên cao",
+  bd_reply:"Trả lời",bd_change_st:"Chuyển trạng thái",
+  st_open:"Đang mở",st_inprogress:"Đang xử lý",st_resolved:"Đã giải quyết",
+  // Upload BIM modal
+  bu_title:"Upload mô hình BIM mới",bu_sub:"Kèm hình preview (bắt buộc). Model 3D chỉ xem qua app AR di động",
+  bu_proj:"Dự án",bu_type:"Loại",bu_name:"Tên mô hình",bu_ver:"Phiên bản",
+  bu_desc:"Mô tả",bu_desc_ph:"Mô tả chi tiết về mô hình, ghi chú thay đổi so với bản trước...",
+  bu_bundle:"File Unity Asset Bundle",bu_bundle_hint:"Hỗ trợ .bundle (Unity Asset Bundle). Max 500MB",
+  bu_drop_file:"Kéo thả file .bundle vào đây hoặc",bu_click:"bấm để chọn",
+  bu_prev:"Hình preview",bu_prev_req:"(tối thiểu 1, tối đa 8 ảnh)",
+  bu_drop_img:"Kéo ảnh vào đây hoặc bấm để chọn",bu_prev_hint:"PNG/JPG · Nên là screenshot chụp từ Revit hoặc BIM viewer",
+  bu_activate:"Kích hoạt ngay sau upload?",bu_activate_note:"Bản active hiện tại sẽ bị đánh dấu inactive",
+  bu_uploading:"Đang upload BIM... (đây là demo)",
+  // Others
+  pn_title:"Tạo dự án mới",pn_sub:"Điền thông tin cơ bản, sau đó có thể upload BIM và cấu hình QR/GPS",
+  pn_code:"Mã dự án",pn_st:"Trạng thái",pn_name:"Tên dự án",pn_addr:"Địa chỉ",
+  pn_owner:"Chủ đầu tư",pn_contractor:"Nhà thầu chính",pn_start:"Ngày khởi công",pn_end:"Ngày dự kiến hoàn thành",
+  pn_engineer:"Kỹ sư phụ trách",pn_note:"Ghi chú",pn_create:"Tạo dự án"
+},
+en:{
+  brand_sub:"Hybrid AR Management",h_search:"Search projects, models, elements, feedback...",
+  role_admin:"Administrator",coming_soon:"Feature coming soon",
+  nav_main:"MAIN",nav_content:"CONTENT",nav_ops:"OPERATIONS",nav_system:"SYSTEM",
+  nav_dashboard:"Dashboard",nav_projects:"Projects",nav_bim:"BIM Models",
+  nav_qr:"QR Markers",nav_gps:"GPS POIs",nav_elements:"M&E Elements",
+  nav_feedback:"Feedback",nav_users:"Users",nav_settings:"Settings",nav_audit:"Audit Log",
+  edit:"Edit",delete:"Delete",view:"View",new_:"New",cancel:"Cancel",save:"Save",save_changes:"Save changes",
+  submit:"Submit",close:"Close",filter:"Filter",all:"All",refresh:"Refresh",export_:"Export report",
+  saved:"Saved successfully",deleted:"Deleted",created:"Created",
+  yes:"Yes",no:"No",search:"Search...",more:"More",add:"Add",remove:"Remove",
+  dash_title:"Dashboard",dash_sub:"PA3 Hybrid AR system overview",
+  dash_st1:"Active projects",dash_st2:"BIM Models",dash_st3:"QR Markers",
+  dash_st4:"Open feedback",dash_st5:"Engineers online",
+  dash_this_week:"this week",dash_today:"today",dash_ago:"ago",
+  dash_recent_fb:"Recent feedback",dash_recent_fb_sub:"5 latest reports from the field",
+  dash_bim_act:"BIM activity",dash_bim_act_sub:"Latest uploaded models",
+  dash_view_all:"View all",
+  dash_fb_trend:"Feedback trend by week",
+  dash_fb_trend_note:"Feedback rising steadily → consider adding QA staff",
+  dash_prio_dist:"Priority distribution",
+  dash_user_act:"User activity",
+  prio_critical:"Critical",prio_high:"High",prio_medium:"Medium",prio_low:"Low",
+  prj_title:"Projects",prj_sub:"List of construction projects in the system",
+  prj_new:"New project",prj_search:"Search projects by name, code, address...",
+  prj_filter_status:"All statuses",prj_filter_adv:"Advanced filter",
+  prj_st_active:"In progress",prj_st_uat:"UAT",prj_st_plan:"Planning",prj_st_archive:"Archived",
+  prj_qr:"QR",prj_poi:"POI",prj_open:"Open",prj_bim:"BIM",
+  bim_title:"BIM Models",bim_sub:"BIM uploads with preview images and field AR notes",
+  bim_upload:"Upload BIM",bim_search:"Search by model name, project, version...",
+  bim_all_proj:"All projects",bim_all_type:"All types",bim_indoor:"Indoor",bim_outdoor:"Outdoor",
+  bim_active_only:"Active only",bim_all_ver:"Include old versions",
+  bim_active:"Active",bim_old:"Old",bim_previews:"previews",
+  qr_title:"QR Markers",qr_sub:"QR codes placed at sites for indoor AR positioning",
+  qr_new:"Add QR marker",qr_import:"Import CSV",qr_search:"Search by code, project, floor...",
+  qr_code:"QR Code",qr_project:"Project",qr_floor:"Floor / Area",qr_pos:"Position (x,y,z)",
+  qr_size:"Size",qr_installed:"Installed",
+  qr_st_active:"Active",qr_st_damaged:"Damaged",qr_st_removed:"Removed",
+  qr_all_st:"All statuses",
+  action:"Actions",status:"Status",
+  gps_title:"GPS POIs",gps_sub:"Outdoor GPS points (manholes, substations, valves...)",
+  gps_new:"Add POI",gps_search:"Search POI...",
+  gps_all_type:"All types",gps_manhole:"Manhole",gps_sub_station:"Substation",gps_valve:"Valve",
+  gps_name:"Name",gps_type:"Type",gps_active:"Active POIs",gps_inactive:"Inactive POIs",
+  ele_title:"M&E Elements",ele_sub:"Detailed elements inside BIM models",
+  ele_export:"Export Excel",ele_search:"Search element code, name, manufacturer...",
+  ele_all_cat:"All systems",ele_all_bim:"All BIM",
+  ele_electric:"Electric",ele_water:"Water",ele_hvac:"HVAC",ele_fire:"Fire",
+  ele_code:"Element Code",ele_name:"Name",ele_cat:"System",ele_bim_model:"BIM Model",
+  ele_maker:"Manufacturer",ele_fb:"Feedback",ele_st_active:"Active",ele_st_maint:"Maintenance",
+  fb_title:"Feedback",fb_sub:"Reports from field engineers via AR app",
+  fb_new:"Create feedback",fb_search:"Search feedback...",
+  fb_all_prio:"All priorities",fb_all_assignee:"All assignees",
+  fb_board:"Board",fb_list:"List",
+  fb_open:"New",fb_inprogress:"In progress",fb_resolved:"Resolved",fb_closed:"Closed",
+  fb_empty:"Empty",
+  user_title:"Users",user_sub:"System accounts and permissions",
+  user_new:"Add user",user_import:"Import CSV",user_search:"Search name, email...",
+  user_all_role:"All roles",user_all_st:"All statuses",
+  user_total:"Total users",user_active_cnt:"Active",user_engineer_cnt:"Field engineers",user_partner:"Japan partners",
+  user_col_user:"User",user_col_role:"Role",user_col_last:"Last login",
+  user_role_admin:"Admin",user_role_eng:"Engineer",user_role_bql:"PM Board",user_role_bim:"BIM Tech",user_role_view:"Viewer",
+  user_st_active:"Active",user_st_inactive:"Inactive",
+  set_title:"System Settings",set_sub:"Global configuration for PA3 Admin Panel",
+  set_tab_gen:"General",set_tab_ar:"AR / Positioning",set_tab_notif:"Notifications",set_tab_int:"Integrations",set_tab_sec:"Security",
+  set_org:"Organization info",set_org_name:"Organization name",set_org_tax:"Tax code",
+  set_org_email:"System email",set_org_tz:"Timezone",set_org_addr:"Address",
+  set_lang_def:"Default language",set_lang_sys:"System language",set_lang_sys_note:"Applies to the entire admin UI",
+  set_lang_report:"Report language",set_lang_report_note:"Export bilingual VI + JP for Suzuki-san",
+  set_qr_thr:"QR positioning thresholds",set_qr_conf:"Confidence threshold",set_qr_conf_note:"Accept threshold for QR detect (0-1)",
+  set_qr_timeout:"Tracking lost timeout (s)",set_qr_timeout_note:"Seconds after losing QR to switch to GPS",
+  set_qr_extended:"Max Extended Tracking distance (m)",set_qr_size:"Min QR size (cm)",
+  set_gps:"GPS RTK Configuration",set_gps_auto:"Auto-switch QR ↔ GPS",set_gps_auto_note:"Automatically switch between modes",
+  set_gps_rtk:"Require RTK Fixed",set_gps_rtk_note:"Only allow GPS mode when RTK Fixed",
+  set_gps_kalman:"Kalman Filter EKF",set_gps_kalman_note:"Enable in Full phase",
+  set_notif_ch:"Notification channels",set_notif_push:"Push notifications",set_notif_push_note:"FCM for Android, APNs for iOS",
+  set_notif_email:"Email",set_notif_email_note:"Via AWS SES SMTP",
+  set_notif_sms:"SMS (critical only)",set_notif_sms_note:"Twilio, for CRITICAL priority",
+  set_int_ext:"External integrations",set_int_s3:"AWS S3",set_int_ntrip:"NTRIP CORS Vietnam",set_int_dd:"Datadog Monitoring",
+  set_int_connected:"Connected",set_int_not:"Not connected",
+  set_sec_pwd:"Password policy",set_sec_len:"Minimum length",set_sec_exp:"Expiry (days)",
+  set_sec_special:"Require special characters",set_sec_2fa:"2FA for admins",
+  set_sec_sess:"Session",set_sec_jwt:"JWT expire (hours)",set_sec_refresh:"Refresh token expire (days)",
+  lang_vi:"Tiếng Việt",lang_en:"English",lang_ja:"日本語",
+  tz_vn:"Asia/Ho_Chi_Minh (UTC+7)",tz_jp:"Asia/Tokyo (UTC+9)",
+  audit_title:"Audit Log",audit_sub:"All important system actions are logged here",
+  audit_export:"Export CSV",audit_search:"Search user, IP, action...",
+  audit_all_act:"All actions",audit_time_7:"Last 7 days",audit_time_30:"Last 30 days",audit_time_custom:"Custom",
+  audit_time:"Time",audit_user:"User",audit_action:"Action",audit_target:"Target",audit_result:"Result",
+  audit_ok:"Success",audit_err:"Error",
+  bd_tab_preview:"Preview & Info",bd_tab_feedback:"AR Notes",bd_tab_elements:"Elements",bd_tab_versions:"Version history",
+  bd_preview_note:"BIM preview images (not a 3D viewer)",
+  bd_preview_hint:"💡 Note: Admin panel only shows preview images for quick reference. View actual 3D models on the mobile AR app.",
+  bd_info:"Model info",
+  bd_proj:"Project",bd_ver:"Version",bd_type:"Type",bd_size:"File size",bd_fmt:"Format",
+  bd_ele_cnt:"Elements",bd_lod:"LOD",bd_uploader:"Uploader",bd_date:"Upload date",bd_md5:"MD5",bd_url:"S3 URL",
+  bd_desc:"Description",bd_desc_txt:"Detailed BIM for Tower A – Floor 3. Includes complete electrical, water, HVAC, fire systems. Exported from Revit 2024.",
+  bd_dl:"Download bundle",bd_add_prev:"Add preview",
+  bd_notes_title:"Notes & field feedback",
+  bd_notes_sub:"From engineers via AR app when finding deviations or as-built notes",
+  bd_add_note:"Add new note (from admin panel)",bd_photo:"Photo",bd_tag_ele:"Tag element",bd_send:"Send",
+  bd_all_st:"All statuses",bd_newest:"Newest",bd_oldest:"Oldest",bd_prio_hi:"High priority",
+  bd_reply:"Reply",bd_change_st:"Change status",
+  st_open:"Open",st_inprogress:"In progress",st_resolved:"Resolved",
+  bu_title:"Upload new BIM model",bu_sub:"Preview images required. 3D models can only be viewed via the mobile AR app",
+  bu_proj:"Project",bu_type:"Type",bu_name:"Model name",bu_ver:"Version",
+  bu_desc:"Description",bu_desc_ph:"Detailed description, notes vs previous version...",
+  bu_bundle:"Unity Asset Bundle file",bu_bundle_hint:"Supports .bundle (Unity Asset Bundle). Max 500MB",
+  bu_drop_file:"Drop .bundle file here or",bu_click:"click to select",
+  bu_prev:"Preview images",bu_prev_req:"(min 1, max 8 images)",
+  bu_drop_img:"Drop images here or click to select",bu_prev_hint:"PNG/JPG · Screenshots from Revit or BIM viewer preferred",
+  bu_activate:"Activate immediately after upload?",bu_activate_note:"Current active version will be marked inactive",
+  bu_uploading:"Uploading BIM... (demo)",
+  pn_title:"Create new project",pn_sub:"Enter basic info, then upload BIM and configure QR/GPS",
+  pn_code:"Project code",pn_st:"Status",pn_name:"Project name",pn_addr:"Address",
+  pn_owner:"Owner",pn_contractor:"Main contractor",pn_start:"Start date",pn_end:"Expected end date",
+  pn_engineer:"Lead engineer",pn_note:"Notes",pn_create:"Create project"
+},
+ja:{
+  brand_sub:"ハイブリッドAR管理",h_search:"プロジェクト、モデル、部材、フィードバックを検索...",
+  role_admin:"管理者",coming_soon:"機能開発中",
+  nav_main:"メイン",nav_content:"コンテンツ",nav_ops:"運用",nav_system:"システム",
+  nav_dashboard:"ダッシュボード",nav_projects:"プロジェクト",nav_bim:"BIMモデル",
+  nav_qr:"QRマーカー",nav_gps:"GPS POI",nav_elements:"M&E部材",
+  nav_feedback:"フィードバック",nav_users:"ユーザー",nav_settings:"設定",nav_audit:"監査ログ",
+  edit:"編集",delete:"削除",view:"表示",new_:"新規",cancel:"キャンセル",save:"保存",save_changes:"変更を保存",
+  submit:"送信",close:"閉じる",filter:"フィルター",all:"全て",refresh:"更新",export_:"レポート出力",
+  saved:"保存しました",deleted:"削除しました",created:"作成しました",
+  yes:"はい",no:"いいえ",search:"検索...",more:"追加",add:"追加",remove:"削除",
+  dash_title:"ダッシュボード",dash_sub:"PA3ハイブリッドARシステム概要",
+  dash_st1:"稼働プロジェクト",dash_st2:"BIMモデル",dash_st3:"QRマーカー",
+  dash_st4:"未対応フィードバック",dash_st5:"オンライン中のエンジニア",
+  dash_this_week:"今週",dash_today:"本日",dash_ago:"前",
+  dash_recent_fb:"最近のフィードバック",dash_recent_fb_sub:"現場からの最新5件",
+  dash_bim_act:"BIM活動",dash_bim_act_sub:"最新のアップロードモデル",
+  dash_view_all:"全て表示",
+  dash_fb_trend:"週別フィードバックトレンド",
+  dash_fb_trend_note:"フィードバック増加傾向 → BQL人員追加を検討",
+  dash_prio_dist:"優先度分布",
+  dash_user_act:"ユーザー活動",
+  prio_critical:"緊急",prio_high:"高",prio_medium:"中",prio_low:"低",
+  prj_title:"プロジェクト管理",prj_sub:"システム内の建設プロジェクト一覧",
+  prj_new:"新規プロジェクト",prj_search:"名前、コード、住所で検索...",
+  prj_filter_status:"全ステータス",prj_filter_adv:"詳細フィルター",
+  prj_st_active:"進行中",prj_st_uat:"UAT",prj_st_plan:"計画",prj_st_archive:"アーカイブ",
+  prj_qr:"QR",prj_poi:"POI",prj_open:"未対応",prj_bim:"BIM",
+  bim_title:"BIMモデル管理",bim_sub:"プレビュー画像と現場ARノート付きBIMアップロード",
+  bim_upload:"BIMアップロード",bim_search:"モデル名、プロジェクト、バージョンで検索...",
+  bim_all_proj:"全プロジェクト",bim_all_type:"全タイプ",bim_indoor:"屋内",bim_outdoor:"屋外",
+  bim_active_only:"アクティブのみ",bim_all_ver:"旧バージョンも含む",
+  bim_active:"稼働中",bim_old:"旧",bim_previews:"プレビュー",
+  qr_title:"QRマーカー管理",qr_sub:"屋内AR測位用の現場設置QRコード",
+  qr_new:"QRマーカー追加",qr_import:"CSVインポート",qr_search:"コード、プロジェクト、階で検索...",
+  qr_code:"QRコード",qr_project:"プロジェクト",qr_floor:"階 / エリア",qr_pos:"位置 (x,y,z)",
+  qr_size:"サイズ",qr_installed:"設置日",
+  qr_st_active:"稼働中",qr_st_damaged:"破損",qr_st_removed:"撤去",
+  qr_all_st:"全ステータス",
+  action:"操作",status:"ステータス",
+  gps_title:"GPS POI管理",gps_sub:"屋外GPSポイント（マンホール、変電所、バルブ...）",
+  gps_new:"POI追加",gps_search:"POI検索...",
+  gps_all_type:"全タイプ",gps_manhole:"マンホール",gps_sub_station:"変電所",gps_valve:"バルブ",
+  gps_name:"名前",gps_type:"タイプ",gps_active:"稼働中POI",gps_inactive:"停止中POI",
+  ele_title:"M&E部材",ele_sub:"BIMモデル内の詳細部材一覧",
+  ele_export:"Excel出力",ele_search:"部材コード、名前、メーカーで検索...",
+  ele_all_cat:"全システム",ele_all_bim:"全BIM",
+  ele_electric:"電気",ele_water:"給水",ele_hvac:"空調",ele_fire:"消火",
+  ele_code:"部材コード",ele_name:"名前",ele_cat:"システム",ele_bim_model:"BIMモデル",
+  ele_maker:"メーカー",ele_fb:"フィードバック",ele_st_active:"稼働中",ele_st_maint:"メンテナンス中",
+  fb_title:"フィードバック管理",fb_sub:"現場エンジニアがARアプリから送信",
+  fb_new:"フィードバック作成",fb_search:"フィードバック検索...",
+  fb_all_prio:"全優先度",fb_all_assignee:"全担当者",
+  fb_board:"ボード",fb_list:"リスト",
+  fb_open:"新規",fb_inprogress:"対応中",fb_resolved:"解決済",fb_closed:"クローズ",
+  fb_empty:"空",
+  user_title:"ユーザー管理",user_sub:"システムアカウント＋権限",
+  user_new:"ユーザー追加",user_import:"CSVインポート",user_search:"名前、メールで検索...",
+  user_all_role:"全ロール",user_all_st:"全ステータス",
+  user_total:"総ユーザー数",user_active_cnt:"稼働中",user_engineer_cnt:"現場エンジニア",user_partner:"日本パートナー",
+  user_col_user:"ユーザー",user_col_role:"ロール",user_col_last:"最終ログイン",
+  user_role_admin:"管理者",user_role_eng:"エンジニア",user_role_bql:"BQL",user_role_bim:"BIM技師",user_role_view:"閲覧",
+  user_st_active:"稼働中",user_st_inactive:"停止",
+  set_title:"システム設定",set_sub:"PA3管理パネル全体の設定",
+  set_tab_gen:"一般",set_tab_ar:"AR / 測位",set_tab_notif:"通知",set_tab_int:"連携",set_tab_sec:"セキュリティ",
+  set_org:"組織情報",set_org_name:"組織名",set_org_tax:"税務コード",
+  set_org_email:"システムメール",set_org_tz:"タイムゾーン",set_org_addr:"住所",
+  set_lang_def:"デフォルト言語",set_lang_sys:"システム言語",set_lang_sys_note:"管理UI全体に適用",
+  set_lang_report:"レポート言語",set_lang_report_note:"鈴木様向け VI+JP バイリンガル出力",
+  set_qr_thr:"QR測位しきい値",set_qr_conf:"信頼度しきい値",set_qr_conf_note:"QR検出受入しきい値 (0-1)",
+  set_qr_timeout:"トラッキング喪失タイムアウト (秒)",set_qr_timeout_note:"QR喪失後GPSに切替までの秒数",
+  set_qr_extended:"拡張トラッキング最大距離 (m)",set_qr_size:"QR最小サイズ (cm)",
+  set_gps:"GPS RTK設定",set_gps_auto:"QR ↔ GPS 自動切替",set_gps_auto_note:"モード間の自動切替",
+  set_gps_rtk:"RTK Fixed必須",set_gps_rtk_note:"RTK Fixed時のみGPSモード許可",
+  set_gps_kalman:"カルマンフィルターEKF",set_gps_kalman_note:"フルフェーズで有効化",
+  set_notif_ch:"通知チャネル",set_notif_push:"プッシュ通知",set_notif_push_note:"Android: FCM, iOS: APNs",
+  set_notif_email:"メール",set_notif_email_note:"AWS SES SMTP経由",
+  set_notif_sms:"SMS (緊急のみ)",set_notif_sms_note:"Twilio、緊急優先",
+  set_int_ext:"外部連携",set_int_s3:"AWS S3",set_int_ntrip:"NTRIP CORS ベトナム",set_int_dd:"Datadog監視",
+  set_int_connected:"接続済",set_int_not:"未接続",
+  set_sec_pwd:"パスワードポリシー",set_sec_len:"最小長",set_sec_exp:"有効期限 (日)",
+  set_sec_special:"特殊文字必須",set_sec_2fa:"管理者2FA",
+  set_sec_sess:"セッション",set_sec_jwt:"JWT有効期限 (時間)",set_sec_refresh:"リフレッシュトークン有効期限 (日)",
+  lang_vi:"Tiếng Việt",lang_en:"English",lang_ja:"日本語",
+  tz_vn:"Asia/Ho_Chi_Minh (UTC+7)",tz_jp:"Asia/Tokyo (UTC+9)",
+  audit_title:"監査ログ",audit_sub:"システムの重要操作を全て記録",
+  audit_export:"CSV出力",audit_search:"ユーザー、IP、アクション検索...",
+  audit_all_act:"全アクション",audit_time_7:"過去7日",audit_time_30:"過去30日",audit_time_custom:"カスタム",
+  audit_time:"時間",audit_user:"ユーザー",audit_action:"アクション",audit_target:"対象",audit_result:"結果",
+  audit_ok:"成功",audit_err:"エラー",
+  bd_tab_preview:"プレビュー＆情報",bd_tab_feedback:"ARノート",bd_tab_elements:"部材",bd_tab_versions:"バージョン履歴",
+  bd_preview_note:"BIMプレビュー画像 (3Dビューアではありません)",
+  bd_preview_hint:"💡 注記: 管理パネルは参照用プレビュー画像のみ表示。実3Dモデルはモバイルアプリで閲覧。",
+  bd_info:"モデル情報",
+  bd_proj:"プロジェクト",bd_ver:"バージョン",bd_type:"タイプ",bd_size:"ファイルサイズ",bd_fmt:"フォーマット",
+  bd_ele_cnt:"部材数",bd_lod:"LOD",bd_uploader:"アップロード者",bd_date:"アップロード日",bd_md5:"MD5",bd_url:"S3 URL",
+  bd_desc:"説明",bd_desc_txt:"A棟3階の詳細BIM。電気、給水、空調、消火系統完備。Revit 2024からエクスポート。",
+  bd_dl:"バンドルダウンロード",bd_add_prev:"プレビュー追加",
+  bd_notes_title:"ノート＆現場フィードバック",
+  bd_notes_sub:"現場エンジニアがARアプリから、施工実績や差異を報告",
+  bd_add_note:"新規ノート追加 (管理パネルから)",bd_photo:"写真",bd_tag_ele:"部材タグ",bd_send:"送信",
+  bd_all_st:"全ステータス",bd_newest:"新しい順",bd_oldest:"古い順",bd_prio_hi:"優先度高",
+  bd_reply:"返信",bd_change_st:"ステータス変更",
+  st_open:"未対応",st_inprogress:"対応中",st_resolved:"解決済",
+  bu_title:"新規BIMモデルアップロード",bu_sub:"プレビュー画像必須。3Dモデルはモバイルアプリでのみ閲覧可能",
+  bu_proj:"プロジェクト",bu_type:"タイプ",bu_name:"モデル名",bu_ver:"バージョン",
+  bu_desc:"説明",bu_desc_ph:"詳細説明、前バージョンとの変更点...",
+  bu_bundle:"Unity Asset Bundleファイル",bu_bundle_hint:".bundle対応 (Unity Asset Bundle)、最大500MB",
+  bu_drop_file:".bundleファイルをドロップまたは",bu_click:"クリックで選択",
+  bu_prev:"プレビュー画像",bu_prev_req:"(最低1、最大8画像)",
+  bu_drop_img:"画像をドロップまたはクリックで選択",bu_prev_hint:"PNG/JPG · Revit・BIMビューアからのスクリーンショット推奨",
+  bu_activate:"アップロード後すぐ有効化?",bu_activate_note:"現アクティブ版はinactiveになります",
+  bu_uploading:"BIMアップロード中...(デモ)",
+  pn_title:"新規プロジェクト作成",pn_sub:"基本情報入力後、BIMアップロード・QR/GPS設定可能",
+  pn_code:"プロジェクトコード",pn_st:"ステータス",pn_name:"プロジェクト名",pn_addr:"住所",
+  pn_owner:"事業主",pn_contractor:"元請け",pn_start:"着工日",pn_end:"予定完了日",
+  pn_engineer:"担当エンジニア",pn_note:"備考",pn_create:"プロジェクト作成"
+}};
+
+let lang='vi';
+const t=k=>(I18N[lang]&&I18N[lang][k])||k;
+
+function setLang(l){
+  lang=l;
+  document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===l));
+  applyStaticLang();
+  render(currentPage); // Re-render current page in new language
+}
+function applyStaticLang(){
+  document.querySelectorAll('[data-t]').forEach(el=>{el.textContent=t(el.dataset.t)});
+  document.querySelectorAll('[data-t-attr]').forEach(el=>{
+    const parts=el.dataset.tAttr.split('|');
+    parts.forEach(p=>{const[attr,key]=p.split(':');el[attr]=t(key)});
+  });
+}
+
+function toast(type,msg){
+  const wrap=document.getElementById('toasts');
+  const el=document.createElement('div');
+  el.className='toast '+(type==='success'?'':type);
+  const icons={success:'i-check',err:'i-alert',warn:'i-alert',info:'i-info'};
+  el.innerHTML=`<div class="toast-icon"><svg width="16" height="16"><use href="#${icons[type]||'i-check'}"/></svg></div><div class="toast-text">${msg}</div>`;
+  wrap.appendChild(el);
+  setTimeout(()=>{el.style.animation='slideIn .2s reverse';setTimeout(()=>el.remove(),200)},2800);
+}
+function openModal(id){const m=document.getElementById(id);if(m)m.classList.add('on')}
+function closeModal(id){const m=document.getElementById(id);if(m)m.classList.remove('on')}
+function closeAllModals(){document.querySelectorAll('.overlay').forEach(m=>m.classList.remove('on'))}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeAllModals()});
+function switchTab(btn,panelId){
+  const tabs=btn.parentElement.querySelectorAll('.tab');
+  tabs.forEach(t=>t.classList.remove('on'));btn.classList.add('on');
+  const panels=btn.parentElement.parentElement.querySelectorAll('.tab-panel');
+  panels.forEach(p=>p.classList.remove('on'));
+  document.getElementById(panelId).classList.add('on');
+}
+
+// ============ IMAGES from Unsplash (architecture/BIM) ============
+const IMG={
+  proj:['https://images.unsplash.com/photo-1487958449943-2429e8be8625?w=600&h=280&fit=crop',
+        'https://images.unsplash.com/photo-1590725175785-de025cbfbd45?w=600&h=280&fit=crop',
+        'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?w=600&h=280&fit=crop',
+        'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&h=280&fit=crop'],
+  bim:['https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&h=400&fit=crop',
+       'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=600&h=400&fit=crop',
+       'https://images.unsplash.com/photo-1523217582562-09d0def993a6?w=600&h=400&fit=crop',
+       'https://images.unsplash.com/photo-1481253127861-534498168948?w=600&h=400&fit=crop',
+       'https://images.unsplash.com/photo-1554435493-93422e8220c8?w=600&h=400&fit=crop'],
+  bimDetail:['https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=1200&h=750&fit=crop',
+             'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=1200&h=750&fit=crop',
+             'https://images.unsplash.com/photo-1523217582562-09d0def993a6?w=1200&h=750&fit=crop'],
+  bimThumb:['https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=120&h=120&fit=crop',
+            'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=120&h=120&fit=crop',
+            'https://images.unsplash.com/photo-1523217582562-09d0def993a6?w=120&h=120&fit=crop'],
+  fb:['https://images.unsplash.com/photo-1580983230712-49a4d8a3d31d?w=400&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=400&h=300&fit=crop',
+      'https://images.unsplash.com/photo-1595079676339-1534801ad6cf?w=400&h=300&fit=crop']
+};
+
+// ============ MOCK DATA ============
+const DB={
+  projects:[
+    {id:1,code:'PROJ001',name:'Tòa nhà A – Khu đô thị X',addr:'Số 1 ABC, Hà Nội',status:'active',qr:45,poi:12,fb:3,bim:'v1.2',img:IMG.proj[0]},
+    {id:2,code:'PROJ002',name:'Nhà máy B – KCN Y',addr:'Lô 5, KCN Y, Hải Phòng',status:'uat',qr:78,poi:24,fb:1,bim:'v0.9',img:IMG.proj[1]},
+    {id:3,code:'PROJ003',name:'Bệnh viện C',addr:'Đường DEF, TP.HCM',status:'active',qr:102,poi:18,fb:7,bim:'v2.0',img:IMG.proj[2]},
+    {id:4,code:'PROJ004',name:'Khách sạn D – Đà Nẵng',addr:'Bãi biển ABC, Đà Nẵng',status:'plan',qr:0,poi:0,fb:0,bim:'-',img:IMG.proj[3]}
+  ],
+  bim:[
+    {id:1,project:'PROJ001',name:'Tòa A – Indoor Floor 3',type:'indoor',version:'v1.2',size:'42 MB',uploader:'Lê Văn C',date:'15/06/2026',active:true,previews:3,notes:5,img:IMG.bim[0]},
+    {id:2,project:'PROJ001',name:'Tòa A – Outdoor site plan',type:'outdoor',version:'v1.1',size:'28 MB',uploader:'Lê Văn C',date:'10/06/2026',active:true,previews:2,notes:2,img:IMG.bim[1]},
+    {id:3,project:'PROJ002',name:'Nhà máy B – Full model',type:'indoor',version:'v0.9',size:'128 MB',uploader:'BIM Tech',date:'20/06/2026',active:true,previews:5,notes:8,img:IMG.bim[2]},
+    {id:4,project:'PROJ003',name:'Bệnh viện C – Tầng 1-5',type:'indoor',version:'v2.0',size:'256 MB',uploader:'BIM Tech 2',date:'01/07/2026',active:true,previews:6,notes:12,img:IMG.bim[3]},
+    {id:5,project:'PROJ001',name:'Tòa A – Indoor Floor 3',type:'indoor',version:'v1.1',size:'40 MB',uploader:'Lê Văn C',date:'01/06/2026',active:false,previews:2,notes:0,img:IMG.bim[4]}
+  ],
+  qr:[
+    {id:1,code:'PROJ001-F03-M001',project:'PROJ001',floor:'Tầng 3',pos:'(12.5, 3.2, 8.7)',size:'20cm',status:'active',installed:'01/03/2026'},
+    {id:2,code:'PROJ001-F03-M002',project:'PROJ001',floor:'Tầng 3',pos:'(15.0, 3.2, 8.7)',size:'20cm',status:'active',installed:'01/03/2026'},
+    {id:3,code:'PROJ001-F02-M001',project:'PROJ001',floor:'Tầng 2',pos:'(10.0, 3.2, 5.5)',size:'20cm',status:'active',installed:'02/03/2026'},
+    {id:4,code:'PROJ001-F01-M003',project:'PROJ001',floor:'Tầng 1',pos:'(8.5, 3.2, 2.5)',size:'25cm',status:'damaged',installed:'02/03/2026'},
+    {id:5,code:'PROJ002-F01-M001',project:'PROJ002',floor:'Xưởng',pos:'(20.0, 4.5, 15.0)',size:'30cm',status:'active',installed:'15/03/2026'},
+    {id:6,code:'PROJ003-F01-M001',project:'PROJ003',floor:'Sảnh',pos:'(5.0, 3.0, 3.0)',size:'20cm',status:'active',installed:'20/06/2026'}
+  ],
+  gps:[
+    {id:1,name:'Hố ga cống chính',project:'PROJ001',type:'manhole',lat:21.028511,lon:105.804817,status:'active'},
+    {id:2,name:'Trạm biến áp T2',project:'PROJ001',type:'sub_station',lat:21.028700,lon:105.804900,status:'active'},
+    {id:3,name:'Hố ga phía Đông',project:'PROJ002',type:'manhole',lat:20.850312,lon:106.683120,status:'active'},
+    {id:4,name:'Van khoá D200',project:'PROJ003',type:'valve',lat:10.762622,lon:106.660172,status:'inactive'}
+  ],
+  elements:[
+    {id:'ELE-380V-F03-005',bim:'Tòa A - Indoor F3',cat:'electric',name:'Cáp điện 380V phòng 301',maker:'Cadivi',status:'active',fb:2},
+    {id:'WAT-D90-F03-012',bim:'Tòa A - Indoor F3',cat:'water',name:'Ống nước D90 hành lang',maker:'Bình Minh',status:'active',fb:1},
+    {id:'HVAC-400-F03-004',bim:'Tòa A - Indoor F3',cat:'hvac',name:'Ống gió 400x300 khu A',maker:'Daikin',status:'active',fb:0},
+    {id:'FIRE-D50-F03-018',bim:'Tòa A - Indoor F3',cat:'fire',name:'Ống PCCC D50 tầng 3',maker:'VSP',status:'maint',fb:3}
+  ],
+  feedback:[
+    {id:'FB-001',title:'Rò rỉ đường ống nước tầng 3',project:'PROJ001',user:'Nguyễn Văn A',prio:'hi',status:'inprogress',date:'14/07/2026',photos:2,loc:'Tầng 3, Khu Bắc'},
+    {id:'FB-002',title:'Ổ cắm điện không đúng vị trí BIM',project:'PROJ001',user:'Nguyễn Văn A',prio:'med',status:'open',date:'15/07/2026',photos:1,loc:'Phòng 302'},
+    {id:'FB-003',title:'Hố ga cần vệ sinh',project:'PROJ001',user:'Phạm Văn E',prio:'med',status:'resolved',date:'10/07/2026',photos:3,loc:'Ngoài trời'},
+    {id:'FB-004',title:'Thiếu ống HVAC trên bản vẽ',project:'PROJ003',user:'Lê Văn C',prio:'cr',status:'open',date:'16/07/2026',photos:4,loc:'BV C - Tầng 2'},
+    {id:'FB-005',title:'Marker QR bị bong tróc',project:'PROJ001',user:'Nguyễn Văn A',prio:'low',status:'open',date:'18/07/2026',photos:1,loc:'F1-M003'}
+  ],
+  users:[
+    {id:1,name:'Anh Tuấn',email:'admin@rdsic.vn',role:'admin',status:'active',lastLogin:'20/07/2026 09:15'},
+    {id:2,name:'Nguyễn Văn A',email:'engineer01@rdsic.vn',role:'engineer',status:'active',lastLogin:'20/07/2026 08:30'},
+    {id:3,name:'Trần Thị B',email:'bql01@rdsic.vn',role:'bql',status:'active',lastLogin:'19/07/2026 17:00'},
+    {id:4,name:'Lê Văn C',email:'bim01@rdsic.vn',role:'bim_tech',status:'active',lastLogin:'20/07/2026 07:45'},
+    {id:5,name:'Suzuki-san',email:'suzuki@partner.jp',role:'viewer',status:'active',lastLogin:'19/07/2026 16:20'},
+    {id:6,name:'Phạm Văn E',email:'engineer02@rdsic.vn',role:'engineer',status:'inactive',lastLogin:'01/07/2026 10:00'}
+  ]
+};
+
+const PAGES={};
+let currentPage='dashboard';
+function go(page){
+  currentPage=page;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('on'));
+  const nav=document.getElementById('n-'+page);if(nav)nav.classList.add('on');
+  render(page);
+}
+function render(page){
+  const main=document.getElementById('main');
+  main.innerHTML=(PAGES[page]||PAGES.dashboard)();
+  applyStaticLang();
+  window.scrollTo(0,0);
+}
+function initials(name){return name.split(' ').slice(-2).map(w=>w[0]).join('')}
+
+// ============ DASHBOARD ============
+PAGES.dashboard=()=>`
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('dash_title')}</div><div class="page-sub">${t('dash_sub')}</div></div>
+    <div class="flex gap-8">
+      <button class="btn"><svg width="14" height="14"><use href="#i-refresh"/></svg> ${t('refresh')}</button>
+      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg> ${t('export_')}</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('dash_st1')}</div><div class="val">4</div><div class="chg">↑ 1 ${t('dash_this_week')}</div></div><div class="stat-icon"><svg width="22" height="22"><use href="#i-building"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('dash_st2')}</div><div class="val">12</div><div class="chg">↑ 3 ${t('dash_this_week')}</div></div><div class="stat-icon purple"><svg width="22" height="22"><use href="#i-cube"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('dash_st3')}</div><div class="val">225</div><div class="chg">↑ 12 ${t('dash_this_week')}</div></div><div class="stat-icon green"><svg width="22" height="22"><use href="#i-qr"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('dash_st4')}</div><div class="val" style="color:var(--d)">12</div><div class="chg dn">↑ 4 ${t('dash_today')}</div></div><div class="stat-icon red"><svg width="22" height="22"><use href="#i-chat"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('dash_st5')}</div><div class="val">8</div><div class="chg">2h ${t('dash_ago')}</div></div><div class="stat-icon orange"><svg width="22" height="22"><use href="#i-users"/></svg></div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-hd">
+        <div><div class="card-title">${t('dash_recent_fb')}</div><div class="card-sub">${t('dash_recent_fb_sub')}</div></div>
+        <button class="btn btn-sm" onclick="go('feedback')">${t('dash_view_all')}</button>
+      </div>
+      ${DB.feedback.slice(0,5).map(f=>`
+      <div style="padding:10px 0;border-bottom:1px solid var(--bdl);display:flex;gap:12px;align-items:flex-start;cursor:pointer" onclick="openFeedback('${f.id}')">
+        <div class="avatar" style="width:32px;height:32px;font-size:11px">${initials(f.user)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px;margin-bottom:2px">${f.title}</div>
+          <div class="text-sm">${f.user} · ${f.date} · ${f.loc}</div>
+        </div>
+        <span class="prio prio-${f.prio}">${f.prio.toUpperCase()}</span>
+      </div>`).join('')}
+    </div>
+
+    <div class="card">
+      <div class="card-hd">
+        <div><div class="card-title">${t('dash_bim_act')}</div><div class="card-sub">${t('dash_bim_act_sub')}</div></div>
+        <button class="btn btn-sm" onclick="go('bim')">${t('dash_view_all')}</button>
+      </div>
+      ${DB.bim.slice(0,4).map(b=>`
+      <div style="padding:10px 0;border-bottom:1px solid var(--bdl);display:flex;gap:12px;align-items:center;cursor:pointer" onclick="openBim(${b.id})">
+        <div class="thumb"><img src="${b.img}" alt="" loading="lazy"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${b.name} <span style="color:var(--tx2);font-weight:400">· ${b.version}</span></div>
+          <div class="text-sm">${b.project} · ${b.uploader} · ${b.date}</div>
+        </div>
+        <span class="chip ${b.active?'chip-green':'chip-gray'}">${b.active?t('bim_active'):t('bim_old')}</span>
+      </div>`).join('')}
+    </div>
+  </div>
+
+  <div class="grid-3 mt-16">
+    <div class="card">
+      <div class="card-title mb-8">📈 ${t('dash_fb_trend')}</div>
+      <svg viewBox="0 0 300 140" style="width:100%;height:140px">
+        <defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A90E2" stop-opacity=".4"/><stop offset="1" stop-color="#4A90E2" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,110 L40,90 L80,100 L120,60 L160,70 L200,40 L240,55 L280,30 L300,20 L300,140 L0,140 Z" fill="url(#g1)"/>
+        <polyline points="0,110 40,90 80,100 120,60 160,70 200,40 240,55 280,30 300,20" fill="none" stroke="#4A90E2" stroke-width="2"/>
+      </svg>
+      <div class="text-sm mt-8">${t('dash_fb_trend_note')}</div>
+    </div>
+    <div class="card">
+      <div class="card-title mb-8">🎯 ${t('dash_prio_dist')}</div>
+      <div style="display:flex;justify-content:center;padding:12px 0">
+        <svg viewBox="-60 -60 120 120" style="width:140px;height:140px">
+          <circle r="45" fill="none" stroke="#E5E7EB" stroke-width="12"/>
+          <circle r="45" fill="none" stroke="#DC2626" stroke-width="12" stroke-dasharray="70 283" transform="rotate(-90)"/>
+          <circle r="45" fill="none" stroke="#F97316" stroke-width="12" stroke-dasharray="45 283" stroke-dashoffset="-70" transform="rotate(-90)"/>
+          <circle r="45" fill="none" stroke="#F59E0B" stroke-width="12" stroke-dasharray="100 283" stroke-dashoffset="-115" transform="rotate(-90)"/>
+          <text text-anchor="middle" y="6" font-size="18" font-weight="700" fill="#1F2937">28</text>
+        </svg>
+      </div>
+      <div style="display:flex;justify-content:space-around;font-size:11px;color:var(--tx2);text-align:center">
+        <div><span style="color:#DC2626">●</span> ${t('prio_critical')}<br><b style="color:#1F2937">7</b></div>
+        <div><span style="color:#F97316">●</span> ${t('prio_high')}<br><b style="color:#1F2937">4</b></div>
+        <div><span style="color:#F59E0B">●</span> ${t('prio_medium')}<br><b style="color:#1F2937">10</b></div>
+        <div><span style="color:#9CA3AF">●</span> ${t('prio_low')}<br><b style="color:#1F2937">7</b></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title mb-8">👥 ${t('dash_user_act')}</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${DB.users.slice(0,4).map(u=>`
+        <div class="flex-c gap-8">
+          <div class="avatar" style="width:28px;height:28px;font-size:11px">${initials(u.name)}</div>
+          <div style="flex:1"><div style="font-size:12px;font-weight:600">${u.name}</div><div style="font-size:11px;color:var(--tx2)">${t('user_role_'+({admin:'admin',engineer:'eng',bql:'bql',bim_tech:'bim',viewer:'view'}[u.role]))} · ${u.lastLogin}</div></div>
+          <span class="dot" style="color:${u.status==='active'?'var(--s)':'var(--tx2)'}"></span>
+        </div>`).join('')}
+      </div>
+    </div>
+  </div>
+</div>`;
+
+// ============ PROJECTS ============
+PAGES.projects=()=>`
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('prj_title')}</div><div class="page-sub">${t('prj_sub')}</div></div>
+    <button class="btn btn-p" onclick="openModal('m-project-new')"><svg width="14" height="14"><use href="#i-plus"/></svg> ${t('prj_new')}</button>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('prj_search')}"></div>
+    <select class="select"><option>${t('prj_filter_status')}</option><option>${t('prj_st_active')}</option><option>${t('prj_st_uat')}</option><option>${t('prj_st_plan')}</option></select>
+    <button class="btn"><svg width="14" height="14"><use href="#i-filter"/></svg> ${t('prj_filter_adv')}</button>
+  </div>
+  <div class="grid-3">
+    ${DB.projects.map(p=>{
+      const stKey='prj_st_'+p.status;const stChip=p.status==='active'?'chip-green':p.status==='uat'?'chip-yellow':'chip-gray';
+      return `<div class="card" style="padding:0;overflow:hidden;cursor:pointer" onclick="openProject(${p.id})">
+        <div style="height:150px;position:relative;overflow:hidden">
+          <img src="${p.img}" style="width:100%;height:100%;object-fit:cover" alt="" loading="lazy">
+          <div style="position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,rgba(0,0,0,.65))"></div>
+          <span class="chip ${stChip}" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,.95)">${t(stKey)}</span>
+          <div style="position:absolute;bottom:10px;left:12px;color:white"><div style="font-weight:700;font-size:11px;opacity:.85;font-family:monospace">${p.code}</div></div>
+        </div>
+        <div style="padding:14px">
+          <div style="font-weight:700;font-size:14px;margin-bottom:2px">${p.name}</div>
+          <div class="text-sm mb-8">📍 ${p.addr}</div>
+          <div style="display:flex;gap:14px;font-size:12px;padding-top:10px;border-top:1px dashed var(--bd)">
+            <div><b style="color:var(--tx)">${p.qr}</b> <span class="text-sm">${t('prj_qr')}</span></div>
+            <div><b style="color:var(--tx)">${p.poi}</b> <span class="text-sm">${t('prj_poi')}</span></div>
+            <div><b style="color:var(--d)">${p.fb}</b> <span class="text-sm">${t('prj_open')}</span></div>
+            <div style="margin-left:auto"><span class="chip chip-blue">${t('prj_bim')} ${p.bim}</span></div>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>
+</div>`;
+
+// ============ BIM ============
+PAGES.bim=()=>`
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('bim_title')}</div><div class="page-sub">${t('bim_sub')}</div></div>
+    <button class="btn btn-p" onclick="openModal('m-bim-upload')"><svg width="14" height="14"><use href="#i-upload"/></svg> ${t('bim_upload')}</button>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('bim_search')}"></div>
+    <select class="select"><option>${t('bim_all_proj')}</option>${DB.projects.map(p=>`<option>${p.code}</option>`).join('')}</select>
+    <select class="select"><option>${t('bim_all_type')}</option><option>${t('bim_indoor')}</option><option>${t('bim_outdoor')}</option></select>
+    <select class="select"><option>${t('bim_active_only')}</option><option>${t('bim_all_ver')}</option></select>
+  </div>
+  <div class="grid-3">
+    ${DB.bim.map(b=>`
+    <div class="card" style="padding:0;overflow:hidden;cursor:pointer" onclick="openBim(${b.id})">
+      <div style="aspect-ratio:16/10;position:relative;overflow:hidden;background:var(--bdl)">
+        <img src="${b.img}" style="width:100%;height:100%;object-fit:cover" alt="" loading="lazy">
+        <div style="position:absolute;top:10px;left:10px;display:flex;gap:6px">
+          <span class="chip chip-blue" style="background:rgba(227,242,253,.95)">${b.type==='indoor'?t('bim_indoor'):t('bim_outdoor')}</span>
+          ${b.active?`<span class="chip chip-green" style="background:rgba(220,252,231,.95)">${t('bim_active')}</span>`:`<span class="chip chip-gray" style="background:rgba(243,244,246,.95)">${t('bim_old')}</span>`}
+        </div>
+        <div style="position:absolute;bottom:10px;left:10px;background:rgba(0,0,0,.7);color:white;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;backdrop-filter:blur(4px);display:flex;align-items:center;gap:4px">
+          <svg width="12" height="12"><use href="#i-image"/></svg> ${b.previews} ${t('bim_previews')}
+        </div>
+        ${b.notes>0?`<div style="position:absolute;bottom:10px;right:10px;background:var(--d);color:white;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px">
+          <svg width="12" height="12"><use href="#i-chat"/></svg> ${b.notes}
+        </div>`:''}
+      </div>
+      <div style="padding:14px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:2px">${b.name}</div>
+        <div class="text-sm">${b.project} · ${b.version} · ${b.size}</div>
+        <div class="flex-b mt-8" style="padding-top:10px;border-top:1px dashed var(--bd)">
+          <div class="flex-c gap-8">
+            <div class="avatar" style="width:22px;height:22px;font-size:10px">${initials(b.uploader)}</div>
+            <span class="text-sm">${b.uploader}</span>
+          </div>
+          <span class="text-sm">${b.date}</span>
+        </div>
+      </div>
+    </div>`).join('')}
+  </div>
+</div>`;
+
+// ============ QR ============
+PAGES.qr=()=>`
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('qr_title')}</div><div class="page-sub">${t('qr_sub')}</div></div>
+    <div class="flex gap-8">
+      <button class="btn"><svg width="14" height="14"><use href="#i-upload"/></svg> ${t('qr_import')}</button>
+      <button class="btn btn-p" onclick="openModal('m-qr-new')"><svg width="14" height="14"><use href="#i-plus"/></svg> ${t('qr_new')}</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('qr_search')}"></div>
+    <select class="select"><option>${t('bim_all_proj')}</option>${DB.projects.map(p=>`<option>${p.code}</option>`).join('')}</select>
+    <select class="select"><option>${t('qr_all_st')}</option><option>${t('qr_st_active')}</option><option>${t('qr_st_damaged')}</option></select>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th style="width:32px"><input type="checkbox"></th><th>${t('qr_code')}</th><th>${t('qr_project')}</th><th>${t('qr_floor')}</th><th>${t('qr_pos')}</th><th>${t('qr_size')}</th><th>${t('status')}</th><th>${t('qr_installed')}</th><th class="text-r" style="width:120px">${t('action')}</th></tr></thead>
+      <tbody>
+        ${DB.qr.map(q=>`
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="td-flex">
+            <div class="thumb" style="background:white;border:1px solid var(--bd);width:44px;height:44px">
+              <svg viewBox="0 0 100 100" width="34" height="34">
+                <rect x="10" y="10" width="24" height="24" fill="black"/><rect x="14" y="14" width="16" height="16" fill="white"/><rect x="17" y="17" width="10" height="10" fill="black"/>
+                <rect x="66" y="10" width="24" height="24" fill="black"/><rect x="70" y="14" width="16" height="16" fill="white"/><rect x="73" y="17" width="10" height="10" fill="black"/>
+                <rect x="10" y="66" width="24" height="24" fill="black"/><rect x="14" y="70" width="16" height="16" fill="white"/><rect x="17" y="73" width="10" height="10" fill="black"/>
+                <rect x="40" y="15" width="6" height="6" fill="black"/><rect x="50" y="25" width="6" height="6" fill="black"/><rect x="45" y="45" width="6" height="6" fill="black"/><rect x="55" y="55" width="6" height="6" fill="black"/>
+              </svg>
+            </div>
+            <span class="td-primary" style="font-family:monospace">${q.code}</span>
+          </div></td>
+          <td>${q.project}</td><td>${q.floor}</td>
+          <td style="font-family:monospace;font-size:12px;color:var(--tx2)">${q.pos}</td>
+          <td>${q.size}</td>
+          <td><span class="chip ${q.status==='active'?'chip-green':'chip-red'}"><span class="dot"></span>${t('qr_st_'+q.status)}</span></td>
+          <td class="text-sm">${q.installed}</td>
+          <td class="text-r"><div class="row-actions" style="justify-content:flex-end">
+            <button class="btn-icon"><svg width="16" height="16"><use href="#i-eye"/></svg></button>
+            <button class="btn-icon"><svg width="16" height="16"><use href="#i-edit"/></svg></button>
+            <button class="btn-icon"><svg width="16" height="16"><use href="#i-download"/></svg></button>
+            <button class="btn-icon" style="color:var(--d)"><svg width="16" height="16"><use href="#i-trash"/></svg></button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>`;
+
+// ============ GPS ============
+PAGES.gps=()=>`
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('gps_title')}</div><div class="page-sub">${t('gps_sub')}</div></div>
+    <button class="btn btn-p" onclick="openModal('m-gps-new')"><svg width="14" height="14"><use href="#i-plus"/></svg> ${t('gps_new')}</button>
+  </div>
+  <div class="grid-2">
+    <div>
+      <div class="toolbar">
+        <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('gps_search')}"></div>
+        <select class="select"><option>${t('gps_all_type')}</option><option>${t('gps_manhole')}</option><option>${t('gps_sub_station')}</option><option>${t('gps_valve')}</option></select>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>${t('gps_name')}</th><th>${t('qr_project')}</th><th>${t('gps_type')}</th><th>Lat / Lon</th><th>${t('status')}</th><th></th></tr></thead>
+          <tbody>
+            ${DB.gps.map(g=>`
+            <tr>
+              <td class="td-primary">${g.name}</td><td>${g.project}</td>
+              <td><span class="chip chip-orange">${t('gps_'+g.type)}</span></td>
+              <td style="font-family:monospace;font-size:11px">${g.lat.toFixed(4)}°N<br>${g.lon.toFixed(4)}°E</td>
+              <td><span class="chip ${g.status==='active'?'chip-green':'chip-gray'}"><span class="dot"></span>${t('qr_st_'+g.status)}</span></td>
+              <td><button class="btn-icon"><svg width="16" height="16"><use href="#i-eye"/></svg></button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="height:500px;background:linear-gradient(135deg,#DDE7F5,#C8DAF0);position:relative">
+        <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);background-size:40px 40px"></div>
+        <svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 500 500">
+          <path d="M 0 200 L 500 210" stroke="#B0BEC5" stroke-width="26" opacity=".6"/>
+          <path d="M 250 0 L 260 500" stroke="#B0BEC5" stroke-width="22" opacity=".6"/>
+          <rect x="70" y="80" width="150" height="110" fill="white" stroke="#78909C" stroke-width="1.5" rx="4"/>
+          <text x="145" y="140" text-anchor="middle" fill="#455A64" font-size="13" font-weight="700">Tòa A</text>
+          <rect x="300" y="290" width="150" height="120" fill="white" stroke="#78909C" stroke-width="1.5" rx="4"/>
+          <text x="375" y="360" text-anchor="middle" fill="#455A64" font-size="13" font-weight="700">Nhà máy B</text>
+        </svg>
+        <div style="position:absolute;top:120px;left:180px;width:22px;height:22px;background:#F59E0B;transform:rotate(45deg);border:3px solid white;box-shadow:0 0 0 2px #F59E0B, 0 2px 6px rgba(0,0,0,.3);cursor:pointer"></div>
+        <div style="position:absolute;top:145px;left:220px;width:22px;height:22px;background:#F59E0B;transform:rotate(45deg);border:3px solid white;box-shadow:0 0 0 2px #F59E0B, 0 2px 6px rgba(0,0,0,.3);cursor:pointer"></div>
+        <div style="position:absolute;top:340px;left:340px;width:22px;height:22px;background:#F59E0B;transform:rotate(45deg);border:3px solid white;box-shadow:0 0 0 2px #F59E0B, 0 2px 6px rgba(0,0,0,.3);cursor:pointer"></div>
+        <div style="position:absolute;top:395px;left:390px;width:22px;height:22px;background:#9CA3AF;transform:rotate(45deg);border:3px solid white;box-shadow:0 0 0 2px #9CA3AF, 0 2px 6px rgba(0,0,0,.3);cursor:pointer"></div>
+        <div style="position:absolute;top:14px;left:14px;background:white;padding:10px 12px;border-radius:8px;box-shadow:var(--sh);font-size:11px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="width:10px;height:10px;background:#F59E0B;transform:rotate(45deg)"></span> ${t('gps_active')}</div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="width:10px;height:10px;background:#9CA3AF;transform:rotate(45deg)"></span> ${t('gps_inactive')}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+// ============ ELEMENTS ============
+PAGES.elements=()=>{
+  const catChip={electric:'chip-yellow',water:'chip-blue',hvac:'chip-green',fire:'chip-red'};
+  const catIcon={electric:'⚡',water:'💧',hvac:'❄️',fire:'🚒'};
+  return `
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('ele_title')}</div><div class="page-sub">${t('ele_sub')}</div></div>
+    <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg> ${t('ele_export')}</button>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('ele_search')}"></div>
+    <select class="select"><option>${t('ele_all_cat')}</option><option>${t('ele_electric')}</option><option>${t('ele_water')}</option><option>${t('ele_hvac')}</option><option>${t('ele_fire')}</option></select>
+    <select class="select"><option>${t('ele_all_bim')}</option>${DB.bim.filter(b=>b.active).map(b=>`<option>${b.name}</option>`).join('')}</select>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>${t('ele_code')}</th><th>${t('ele_name')}</th><th>${t('ele_cat')}</th><th>${t('ele_bim_model')}</th><th>${t('ele_maker')}</th><th>${t('status')}</th><th>${t('ele_fb')}</th><th class="text-r">${t('action')}</th></tr></thead>
+      <tbody>
+        ${DB.elements.map(e=>`<tr>
+          <td class="td-primary" style="font-family:monospace;font-size:12px">${e.id}</td>
+          <td>${e.name}</td>
+          <td><span class="chip ${catChip[e.cat]}">${catIcon[e.cat]} ${t('ele_'+e.cat)}</span></td>
+          <td class="text-sm">${e.bim}</td>
+          <td class="text-sm">${e.maker}</td>
+          <td><span class="chip ${e.status==='active'?'chip-green':'chip-yellow'}"><span class="dot"></span>${t('ele_st_'+({active:'active',maint:'maint'}[e.status]))}</span></td>
+          <td>${e.fb>0?`<span class="chip chip-red">${e.fb}</span>`:'<span class="text-sm">-</span>'}</td>
+          <td class="text-r"><div class="row-actions" style="justify-content:flex-end">
+            <button class="btn-icon" onclick="openModal('m-element-detail')"><svg width="16" height="16"><use href="#i-eye"/></svg></button>
+            <button class="btn-icon"><svg width="16" height="16"><use href="#i-edit"/></svg></button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>`;
+};
+
+// ============ FEEDBACK (Kanban) ============
+PAGES.feedback=()=>{
+  const cols={open:{c:'#EF4444'},inprogress:{c:'#F59E0B'},resolved:{c:'#22C55E'},closed:{c:'#9CA3AF'}};
+  const grouped={open:[],inprogress:[],resolved:[],closed:[]};
+  DB.feedback.forEach(f=>{if(grouped[f.status])grouped[f.status].push(f)});
+  return `
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('fb_title')}</div><div class="page-sub">${t('fb_sub')}</div></div>
+    <div class="flex gap-8">
+      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg> ${t('export_')}</button>
+      <button class="btn btn-p"><svg width="14" height="14"><use href="#i-plus"/></svg> ${t('fb_new')}</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('fb_search')}"></div>
+    <select class="select"><option>${t('bim_all_proj')}</option>${DB.projects.map(p=>`<option>${p.code}</option>`).join('')}</select>
+    <select class="select"><option>${t('fb_all_prio')}</option><option>${t('prio_critical')}</option><option>${t('prio_high')}</option><option>${t('prio_medium')}</option><option>${t('prio_low')}</option></select>
+    <select class="select"><option>${t('fb_all_assignee')}</option>${DB.users.map(u=>`<option>${u.name}</option>`).join('')}</select>
+    <div class="lang" style="background:var(--bdl)">
+      <button class="on">📋 ${t('fb_board')}</button>
+      <button>📄 ${t('fb_list')}</button>
+    </div>
+  </div>
+  <div class="board">
+    ${Object.entries(cols).map(([k,{c}])=>`
+    <div class="col">
+      <div class="col-hd">
+        <div class="col-title" style="color:${c}"><span style="display:inline-block;width:8px;height:8px;background:${c};border-radius:50%;margin-right:6px"></span>${t('fb_'+k)}</div>
+        <div class="col-count">${grouped[k].length}</div>
+      </div>
+      ${grouped[k].map(f=>`
+      <div class="col-card" onclick="openFeedback('${f.id}')">
+        <div class="flex-b mb-8"><span class="text-sm" style="font-family:monospace">${f.id}</span><span class="prio prio-${f.prio}">${f.prio.toUpperCase()}</span></div>
+        <div class="cc-title">${f.title}</div>
+        <div class="cc-meta"><span>📍 ${f.loc}</span></div>
+        <div class="cc-meta mt-8" style="padding-top:8px;border-top:1px dashed var(--bd)">
+          <div class="avatar" style="width:20px;height:20px;font-size:9px">${initials(f.user)}</div>
+          <span>${f.user}</span><span style="margin-left:auto">📷 ${f.photos}</span>
+        </div>
+      </div>`).join('')}
+      ${grouped[k].length===0?`<div class="text-sm text-c" style="padding:20px">${t('fb_empty')}</div>`:''}
+      <button class="btn btn-sm" style="width:100%;justify-content:center;background:transparent;border:1px dashed var(--bd);color:var(--tx2)">+ ${t('add')}</button>
+    </div>`).join('')}
+  </div>
+</div>`;
+};
+
+// ============ USERS ============
+PAGES.users=()=>{
+  const roleKey={admin:'admin',engineer:'eng',bql:'bql',bim_tech:'bim',viewer:'view'};
+  const roleColor={admin:'chip-red',engineer:'chip-blue',bql:'chip-orange',bim_tech:'chip-green',viewer:'chip-gray'};
+  return `
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('user_title')}</div><div class="page-sub">${t('user_sub')}</div></div>
+    <div class="flex gap-8">
+      <button class="btn"><svg width="14" height="14"><use href="#i-upload"/></svg> ${t('user_import')}</button>
+      <button class="btn btn-p" onclick="openModal('m-user-new')"><svg width="14" height="14"><use href="#i-plus"/></svg> ${t('user_new')}</button>
+    </div>
+  </div>
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('user_total')}</div><div class="val">${DB.users.length}</div></div><div class="stat-icon"><svg width="22" height="22"><use href="#i-users"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('user_active_cnt')}</div><div class="val" style="color:var(--s)">${DB.users.filter(u=>u.status==='active').length}</div></div><div class="stat-icon green"><svg width="22" height="22"><use href="#i-check"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('user_engineer_cnt')}</div><div class="val">${DB.users.filter(u=>u.role==='engineer').length}</div></div><div class="stat-icon orange"><svg width="22" height="22"><use href="#i-wrench"/></svg></div></div>
+    <div class="stat"><div class="stat-info"><div class="lbl">${t('user_partner')}</div><div class="val">1</div></div><div class="stat-icon purple"><svg width="22" height="22"><use href="#i-globe"/></svg></div></div>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('user_search')}"></div>
+    <select class="select"><option>${t('user_all_role')}</option><option>${t('user_role_admin')}</option><option>${t('user_role_eng')}</option><option>${t('user_role_bql')}</option><option>${t('user_role_bim')}</option><option>${t('user_role_view')}</option></select>
+    <select class="select"><option>${t('user_all_st')}</option><option>${t('user_st_active')}</option><option>${t('user_st_inactive')}</option></select>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th style="width:32px"><input type="checkbox"></th><th>${t('user_col_user')}</th><th>Email</th><th>${t('user_col_role')}</th><th>${t('status')}</th><th>${t('user_col_last')}</th><th class="text-r">${t('action')}</th></tr></thead>
+      <tbody>
+        ${DB.users.map(u=>`
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="td-flex"><div class="avatar">${initials(u.name)}</div><div><div class="td-primary">${u.name}</div><div class="text-sm">ID: ${u.id}</div></div></div></td>
+          <td>${u.email}</td>
+          <td><span class="chip ${roleColor[u.role]}">${t('user_role_'+roleKey[u.role])}</span></td>
+          <td><span class="chip ${u.status==='active'?'chip-green':'chip-gray'}"><span class="dot"></span>${t('user_st_'+u.status)}</span></td>
+          <td class="text-sm">${u.lastLogin}</td>
+          <td class="text-r"><div class="row-actions" style="justify-content:flex-end">
+            <button class="btn-icon" onclick="openModal('m-user-edit')"><svg width="16" height="16"><use href="#i-edit"/></svg></button>
+            <button class="btn-icon"><svg width="16" height="16"><use href="#i-cog"/></svg></button>
+            <button class="btn-icon" style="color:var(--d)"><svg width="16" height="16"><use href="#i-trash"/></svg></button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>`;
+};
+
+// ============ SETTINGS ============
+PAGES.settings=()=>`
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('set_title')}</div><div class="page-sub">${t('set_sub')}</div></div>
+  </div>
+  <div class="tabs">
+    <button class="tab on" onclick="switchTab(this,'st-general')">${t('set_tab_gen')}</button>
+    <button class="tab" onclick="switchTab(this,'st-ar')">${t('set_tab_ar')}</button>
+    <button class="tab" onclick="switchTab(this,'st-notif')">${t('set_tab_notif')}</button>
+    <button class="tab" onclick="switchTab(this,'st-integ')">${t('set_tab_int')}</button>
+    <button class="tab" onclick="switchTab(this,'st-sec')">${t('set_tab_sec')}</button>
+  </div>
+
+  <div id="st-general" class="tab-panel on">
+    <div class="card">
+      <div class="card-title mb-16">${t('set_org')}</div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('set_org_name')}</label><input class="form-input" value="RDSIC"></div>
+        <div><label class="form-label">${t('set_org_tax')}</label><input class="form-input" value="0100109300"></div>
+      </div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('set_org_email')}</label><input class="form-input" value="admin@rdsic.vn"></div>
+        <div><label class="form-label">${t('set_org_tz')}</label><select class="form-select"><option>${t('tz_vn')}</option><option>${t('tz_jp')}</option></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('set_org_addr')}</label><input class="form-input" value="Số 1 ABC, Hà Nội, Việt Nam"></div>
+    </div>
+    <div class="card">
+      <div class="card-title mb-16">${t('set_lang_def')}</div>
+      <div class="flex-b" style="padding:12px 0;border-bottom:1px dashed var(--bd)"><div><b>${t('set_lang_sys')}</b><div class="text-sm">${t('set_lang_sys_note')}</div></div><select class="form-select" style="width:200px"><option>${t('lang_vi')}</option><option>${t('lang_en')}</option><option>${t('lang_ja')}</option></select></div>
+      <div class="flex-b" style="padding:12px 0"><div><b>${t('set_lang_report')}</b><div class="text-sm">${t('set_lang_report_note')}</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+    </div>
+  </div>
+
+  <div id="st-ar" class="tab-panel">
+    <div class="card">
+      <div class="card-title mb-16">${t('set_qr_thr')}</div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('set_qr_conf')}</label><input class="form-input" type="number" step="0.05" value="0.70"><div class="form-hint">${t('set_qr_conf_note')}</div></div>
+        <div><label class="form-label">${t('set_qr_timeout')}</label><input class="form-input" type="number" value="3"><div class="form-hint">${t('set_qr_timeout_note')}</div></div>
+      </div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('set_qr_extended')}</label><input class="form-input" type="number" value="15"></div>
+        <div><label class="form-label">${t('set_qr_size')}</label><input class="form-input" type="number" value="15"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title mb-16">${t('set_gps')}</div>
+      <div class="flex-b" style="padding:12px 0;border-bottom:1px dashed var(--bd)"><div><b>${t('set_gps_auto')}</b><div class="text-sm">${t('set_gps_auto_note')}</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="flex-b" style="padding:12px 0;border-bottom:1px dashed var(--bd)"><div><b>${t('set_gps_rtk')}</b><div class="text-sm">${t('set_gps_rtk_note')}</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+      <div class="flex-b" style="padding:12px 0"><div><b>${t('set_gps_kalman')}</b><div class="text-sm">${t('set_gps_kalman_note')}</div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+    </div>
+  </div>
+
+  <div id="st-notif" class="tab-panel">
+    <div class="card">
+      <div class="card-title mb-16">${t('set_notif_ch')}</div>
+      <div class="flex-b" style="padding:14px 0;border-bottom:1px dashed var(--bd)"><div class="flex-c gap-12"><div class="stat-icon"><svg width="22" height="22"><use href="#i-bell"/></svg></div><div><b>${t('set_notif_push')}</b><div class="text-sm">${t('set_notif_push_note')}</div></div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="flex-b" style="padding:14px 0;border-bottom:1px dashed var(--bd)"><div class="flex-c gap-12"><div class="stat-icon green"><svg width="22" height="22"><use href="#i-mail"/></svg></div><div><b>${t('set_notif_email')}</b><div class="text-sm">${t('set_notif_email_note')}</div></div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="flex-b" style="padding:14px 0"><div class="flex-c gap-12"><div class="stat-icon orange"><svg width="22" height="22"><use href="#i-chat"/></svg></div><div><b>${t('set_notif_sms')}</b><div class="text-sm">${t('set_notif_sms_note')}</div></div></div><div class="toggle" onclick="this.classList.toggle('on')"></div></div>
+    </div>
+  </div>
+
+  <div id="st-integ" class="tab-panel">
+    <div class="card">
+      <div class="card-title mb-16">${t('set_int_ext')}</div>
+      <div class="flex-b" style="padding:14px 0;border-bottom:1px dashed var(--bd)"><div class="flex-c gap-12"><div class="stat-icon"><svg width="22" height="22"><use href="#i-cube"/></svg></div><div><b>${t('set_int_s3')}</b><div class="text-sm">bucket: pa3-bim-storage · Singapore</div></div></div><span class="chip chip-green"><span class="dot"></span>${t('set_int_connected')}</span></div>
+      <div class="flex-b" style="padding:14px 0;border-bottom:1px dashed var(--bd)"><div class="flex-c gap-12"><div class="stat-icon purple"><svg width="22" height="22"><use href="#i-map-pin"/></svg></div><div><b>${t('set_int_ntrip')}</b><div class="text-sm">rtk.geodesy.gov.vn:2101</div></div></div><span class="chip chip-yellow"><span class="dot"></span>${t('set_int_not')}</span></div>
+      <div class="flex-b" style="padding:14px 0"><div class="flex-c gap-12"><div class="stat-icon orange"><svg width="22" height="22"><use href="#i-history"/></svg></div><div><b>${t('set_int_dd')}</b><div class="text-sm">APM + logs</div></div></div><span class="chip chip-green"><span class="dot"></span>${t('set_int_connected')}</span></div>
+    </div>
+  </div>
+
+  <div id="st-sec" class="tab-panel">
+    <div class="card">
+      <div class="card-title mb-16">${t('set_sec_pwd')}</div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('set_sec_len')}</label><input class="form-input" type="number" value="8"></div>
+        <div><label class="form-label">${t('set_sec_exp')}</label><input class="form-input" type="number" value="90"></div>
+      </div>
+      <div class="flex-b" style="padding:10px 0"><div><b>${t('set_sec_special')}</b></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+      <div class="flex-b" style="padding:10px 0"><div><b>${t('set_sec_2fa')}</b></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-title mb-16">${t('set_sec_sess')}</div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('set_sec_jwt')}</label><input class="form-input" type="number" value="24"></div>
+        <div><label class="form-label">${t('set_sec_refresh')}</label><input class="form-input" type="number" value="30"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex" style="justify-content:flex-end;gap:8px;margin-top:16px">
+    <button class="btn">${t('cancel')}</button>
+    <button class="btn btn-p" onclick="toast('success',t('saved'))">${t('save_changes')}</button>
+  </div>
+</div>`;
+
+// ============ AUDIT ============
+PAGES.audit=()=>{
+  const logs=[
+    {time:'20/07/2026 09:15:42',user:'Anh Tuấn',action:'LOGIN',target:'admin@rdsic.vn',ip:'113.166.10.5',status:'ok'},
+    {time:'20/07/2026 09:03:15',user:'Lê Văn C',action:'UPLOAD_BIM',target:'Tòa A – F3 v1.2',ip:'113.166.10.8',status:'ok'},
+    {time:'20/07/2026 08:45:22',user:'Nguyễn Văn A',action:'CREATE_FEEDBACK',target:'FB-005',ip:'42.117.99.14',status:'ok'},
+    {time:'20/07/2026 08:30:10',user:'Trần Thị B',action:'RESOLVE_FEEDBACK',target:'FB-003',ip:'113.166.10.12',status:'ok'},
+    {time:'19/07/2026 17:00:33',user:'Trần Thị B',action:'ASSIGN_FEEDBACK',target:'FB-001 → self',ip:'113.166.10.12',status:'ok'},
+    {time:'19/07/2026 16:20:05',user:'Suzuki-san',action:'VIEW_PROJECT',target:'PROJ001',ip:'202.44.55.66',status:'ok'},
+    {time:'19/07/2026 14:33:18',user:'unknown',action:'LOGIN_FAILED',target:'engineer99@rdsic.vn',ip:'103.88.121.5',status:'err'},
+    {time:'19/07/2026 12:15:00',user:'Anh Tuấn',action:'DELETE_QR',target:'PROJ001-F01-M999',ip:'113.166.10.5',status:'ok'},
+    {time:'19/07/2026 10:00:00',user:'Anh Tuấn',action:'UPDATE_SETTINGS',target:'ar.qr_threshold: 0.65 → 0.70',ip:'113.166.10.5',status:'ok'}
+  ];
+  return `
+<div class="page active">
+  <div class="page-hd">
+    <div><div class="page-title">${t('audit_title')}</div><div class="page-sub">${t('audit_sub')}</div></div>
+    <div class="flex gap-8">
+      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg> ${t('audit_export')}</button>
+      <button class="btn"><svg width="14" height="14"><use href="#i-refresh"/></svg> ${t('refresh')}</button>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('audit_search')}"></div>
+    <select class="select"><option>${t('audit_all_act')}</option><option>LOGIN</option><option>UPLOAD_BIM</option><option>CREATE_FEEDBACK</option><option>UPDATE_SETTINGS</option><option>DELETE_*</option></select>
+    <select class="select"><option>${t('audit_time_7')}</option><option>${t('audit_time_30')}</option><option>${t('audit_time_custom')}</option></select>
+  </div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>${t('audit_time')}</th><th>${t('audit_user')}</th><th>${t('audit_action')}</th><th>${t('audit_target')}</th><th>IP</th><th>${t('audit_result')}</th></tr></thead>
+      <tbody>
+        ${logs.map(l=>`
+        <tr>
+          <td style="font-family:monospace;font-size:12px;color:var(--tx2)">${l.time}</td>
+          <td class="td-primary">${l.user}</td>
+          <td><span class="chip ${l.action.includes('DELETE')||l.action.includes('FAILED')?'chip-red':l.action.includes('CREATE')||l.action.includes('LOGIN')?'chip-blue':l.action.includes('RESOLVE')?'chip-green':'chip-yellow'}" style="font-family:monospace">${l.action}</span></td>
+          <td class="text-sm">${l.target}</td>
+          <td style="font-family:monospace;font-size:12px;color:var(--tx2)">${l.ip}</td>
+          <td><span class="chip ${l.status==='ok'?'chip-green':'chip-red'}"><span class="dot"></span>${t('audit_'+l.status)}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>`;
+};
+
+// ============ MODALS ============
+function injectModals(){
+  document.getElementById('modals').innerHTML=`
+
+<!-- BIM DETAIL -->
+<div class="overlay" id="m-bim-detail">
+  <div class="modal xl">
+    <div class="modal-hd">
+      <div>
+        <div class="modal-title" id="bd-title">Tòa A – Indoor Floor 3</div>
+        <div class="modal-sub" id="bd-sub">PROJ001 · v1.2 · Indoor · 42 MB · 15/06/2026</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('m-bim-detail')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs">
+        <button class="tab on" onclick="switchTab(this,'bd-tab-preview')">🖼 ${t('bd_tab_preview')}</button>
+        <button class="tab" onclick="switchTab(this,'bd-tab-feedback')">💬 ${t('bd_tab_feedback')} (<span id="bd-note-count">5</span>)</button>
+        <button class="tab" onclick="switchTab(this,'bd-tab-elements')">🔧 ${t('bd_tab_elements')}</button>
+        <button class="tab" onclick="switchTab(this,'bd-tab-versions')">📚 ${t('bd_tab_versions')}</button>
+      </div>
+
+      <div id="bd-tab-preview" class="tab-panel on">
+        <div class="bim-detail">
+          <div>
+            <div class="card-sub mb-8" style="font-weight:600">${t('bd_preview_note')}</div>
+            <div class="gallery">
+              <div class="gallery-main">
+                <img id="bd-main-img" src="${IMG.bimDetail[0]}" alt="" loading="lazy">
+                <div style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,.7);color:white;padding:4px 10px;border-radius:6px;font-size:11px;backdrop-filter:blur(4px)">
+                  <span id="bd-gallery-idx">1</span> / 3
+                </div>
+              </div>
+              <div class="gallery-thumbs">
+                <div class="t on" onclick="setGalleryThumb(this,0,'${IMG.bimDetail[0]}')"><img src="${IMG.bimThumb[0]}" alt="" loading="lazy"></div>
+                <div class="t" onclick="setGalleryThumb(this,1,'${IMG.bimDetail[1]}')"><img src="${IMG.bimThumb[1]}" alt="" loading="lazy"></div>
+                <div class="t" onclick="setGalleryThumb(this,2,'${IMG.bimDetail[2]}')"><img src="${IMG.bimThumb[2]}" alt="" loading="lazy"></div>
+                <div class="t" style="background:#F9FAFB;border:1px dashed var(--bd);color:var(--tx2);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:300">+</div>
+                <div class="t" style="background:#F9FAFB;border:1px dashed var(--bd);color:var(--tx2);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:300">+</div>
+              </div>
+              <div class="text-sm" style="padding:8px 10px;background:var(--pl);border-radius:6px;color:var(--pd);border-left:3px solid var(--p);line-height:1.5">
+                ${t('bd_preview_hint')}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="card-sub mb-8" style="font-weight:600">${t('bd_info')}</div>
+            <ul class="info-list">
+              <li><span>${t('bd_proj')}</span><b>PROJ001 – Tòa A</b></li>
+              <li><span>${t('bd_ver')}</span><b>v1.2 <span class="chip chip-green" style="margin-left:6px">${t('bim_active')}</span></b></li>
+              <li><span>${t('bd_type')}</span><b>${t('bim_indoor')}</b></li>
+              <li><span>${t('bd_size')}</span><b>42 MB</b></li>
+              <li><span>${t('bd_fmt')}</span><b>Unity Asset Bundle</b></li>
+              <li><span>${t('bd_ele_cnt')}</span><b>1,247</b></li>
+              <li><span>${t('bd_lod')}</span><b>350</b></li>
+              <li><span>${t('bd_uploader')}</span><b>Lê Văn C</b></li>
+              <li><span>${t('bd_date')}</span><b>15/06/2026 14:22</b></li>
+              <li><span>${t('bd_md5')}</span><b style="font-family:monospace;font-size:11px">abc123def456...</b></li>
+              <li><span>${t('bd_url')}</span><b><a style="color:var(--p);text-decoration:none">s3://pa3-bim/...</a></b></li>
+            </ul>
+            <div class="mt-16">
+              <div class="card-sub mb-8" style="font-weight:600">${t('bd_desc')}</div>
+              <div style="padding:12px;background:#F9FAFB;border-radius:8px;font-size:13px;line-height:1.6">${t('bd_desc_txt')}</div>
+            </div>
+            <div class="flex gap-8 mt-16">
+              <button class="btn" style="flex:1"><svg width="14" height="14"><use href="#i-download"/></svg> ${t('bd_dl')}</button>
+              <button class="btn" style="flex:1"><svg width="14" height="14"><use href="#i-image"/></svg> ${t('bd_add_prev')}</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="bd-tab-feedback" class="tab-panel">
+        <div class="flex-b mb-16">
+          <div><div style="font-weight:700;font-size:14px">${t('bd_notes_title')}</div><div class="text-sm">${t('bd_notes_sub')}</div></div>
+          <div class="flex gap-8">
+            <select class="select"><option>${t('bd_all_st')}</option><option>${t('st_open')}</option><option>${t('st_inprogress')}</option><option>${t('st_resolved')}</option></select>
+            <select class="select"><option>${t('bd_newest')}</option><option>${t('bd_oldest')}</option><option>${t('bd_prio_hi')}</option></select>
+          </div>
+        </div>
+        <div class="timeline">
+          ${[
+            {st:'open',user:'Nguyễn Văn A',avatar:'NA',role:'user_role_eng',time:'20/07/2026 14:32',msg:'Phát hiện <b>ống nước D90</b> ở khu vực sảnh chính lệch khoảng <b>15cm về phía đông</b> so với thi công thực tế. Cần cập nhật as-built.',photos:[IMG.fb[0],IMG.fb[2]],gps:'21.0285°N, 105.8048°E',qr:'PROJ001-F03-M001',prio:'hi'},
+            {st:'inprogress',user:'Nguyễn Văn A',avatar:'NA',role:'user_role_eng',time:'19/07/2026 10:15',msg:'Ổ cắm điện phòng 302 không có trong BIM. Đã thi công thêm <b>4 ổ</b>, vị trí gần cửa sổ.',photos:[IMG.fb[1]],gps:'-',qr:'PROJ001-F03-M002',prio:'med'},
+            {st:'inprogress',user:'Lê Văn C',avatar:'LC',role:'user_role_bim',time:'18/07/2026 09:00',msg:'Đã kiểm tra: cần bổ sung <b>2 đầu chờ điện</b> tại vị trí gần cột C-15. Sẽ update BIM version 1.3 trong tuần này.',photos:[],gps:'-',qr:'-',prio:'med'},
+            {st:'resolved',user:'Nguyễn Văn A',avatar:'NA',role:'user_role_eng',time:'17/07/2026 16:45',msg:'HVAC 400x300 khu A hoạt động ổn, không có sai lệch. ✅',photos:[IMG.fb[2]],gps:'-',qr:'PROJ001-F03-M001',prio:'low'},
+            {st:'resolved',user:'Trần Thị B',avatar:'TB',role:'user_role_bql',time:'15/07/2026 11:20',msg:'Đã duyệt update as-built cho khu B. BIM Tech chuẩn bị bản 1.3.',photos:[],gps:'-',qr:'-',prio:'low'}
+          ].map(n=>{
+            const ic={open:{c:'err',i:'i-alert'},inprogress:{c:'warn',i:'i-clock'},resolved:{c:'ok',i:'i-check'}}[n.st];
+            const stChip={open:'chip-red',inprogress:'chip-yellow',resolved:'chip-green'}[n.st];
+            return `
+            <div class="tl-item">
+              <div class="tl-icon ${ic.c}"><svg width="14" height="14"><use href="#${ic.i}"/></svg></div>
+              <div class="tl-body">
+                <div class="tl-head">
+                  <div class="tl-user"><div class="avatar">${n.avatar}</div>${n.user} <span class="text-sm">· ${t(n.role)}</span></div>
+                  <div class="flex-c gap-8"><span class="chip ${stChip}">${t('st_'+n.st)}</span><span class="prio prio-${n.prio}">${n.prio.toUpperCase()}</span><span class="tl-time">${n.time}</span></div>
+                </div>
+                <div class="tl-msg">${n.msg}</div>
+                ${n.photos.length>0?`<div class="tl-attach">
+                  ${n.photos.map(p=>`<div class="att"><img src="${p}" alt="" loading="lazy"></div>`).join('')}
+                  <button class="btn-icon" style="width:70px;height:70px;background:var(--bdl);border:1px dashed var(--bd);border-radius:6px"><svg width="18" height="18"><use href="#i-eye"/></svg></button>
+                </div>`:''}
+                <div class="tl-meta">
+                  ${n.gps!=='-'?`<span>📍 ${n.gps}</span>`:''}
+                  ${n.qr!=='-'?`<span>🔗 ${n.qr}</span>`:''}
+                  ${n.photos.length>0?`<span>📷 ${n.photos.length}</span>`:''}
+                  <span style="margin-left:auto"><button class="btn-ghost btn-sm">${t('bd_reply')}</button>${n.st!=='resolved'?`<button class="btn-ghost btn-sm">${t('bd_change_st')}</button>`:''}</span>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="card mt-16" style="background:#F9FAFB">
+          <div class="form-label">${t('bd_add_note')}</div>
+          <textarea class="form-textarea" placeholder="..."></textarea>
+          <div class="flex-b mt-8">
+            <div class="flex gap-8"><button class="btn btn-sm"><svg width="12" height="12"><use href="#i-image"/></svg> ${t('bd_photo')}</button><button class="btn btn-sm"><svg width="12" height="12"><use href="#i-tag"/></svg> ${t('bd_tag_ele')}</button></div>
+            <button class="btn btn-p btn-sm" onclick="toast('success',t('saved'))">${t('bd_send')}</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="bd-tab-elements" class="tab-panel">
+        <div class="toolbar">
+          <div class="search"><svg width="16" height="16"><use href="#i-search"/></svg><input placeholder="${t('ele_search')}"></div>
+          <select class="select"><option>${t('ele_all_cat')}</option></select>
+        </div>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>${t('ele_code')}</th><th>${t('ele_name')}</th><th>${t('ele_cat')}</th><th>${t('ele_maker')}</th><th>${t('ele_fb')}</th><th></th></tr></thead>
+          <tbody>${DB.elements.map(e=>{const catChip={electric:'chip-yellow',water:'chip-blue',hvac:'chip-green',fire:'chip-red'}[e.cat];const catIcon={electric:'⚡',water:'💧',hvac:'❄️',fire:'🚒'}[e.cat];return `<tr>
+            <td style="font-family:monospace;font-size:12px" class="td-primary">${e.id}</td>
+            <td>${e.name}</td><td><span class="chip ${catChip}">${catIcon} ${t('ele_'+e.cat)}</span></td>
+            <td class="text-sm">${e.maker}</td>
+            <td>${e.fb>0?`<span class="chip chip-red">${e.fb}</span>`:'-'}</td>
+            <td><button class="btn-icon"><svg width="14" height="14"><use href="#i-eye"/></svg></button></td>
+          </tr>`}).join('')}</tbody>
+        </table></div>
+      </div>
+
+      <div id="bd-tab-versions" class="tab-panel">
+        <div class="timeline">
+          ${[{v:'v1.2',date:'15/06/2026',user:'Lê Văn C',msg:'Cập nhật đầy đủ hệ HVAC',active:true},{v:'v1.1',date:'01/06/2026',user:'Lê Văn C',msg:'Sửa vị trí ống nước D90',active:false},{v:'v1.0',date:'20/05/2026',user:'BIM Tech',msg:'Bản đầu tiên',active:false}].map(v=>`
+          <div class="tl-item">
+            <div class="tl-icon"><svg width="14" height="14"><use href="#i-cube"/></svg></div>
+            <div class="tl-body">
+              <div class="tl-head"><div class="tl-user"><b>${v.v}</b> ${v.active?`<span class="chip chip-green">${t('bim_active')}</span>`:''}</div><div class="tl-time">${v.date} · ${v.user}</div></div>
+              <div class="tl-msg">${v.msg}</div>
+              <div class="tl-meta"><span style="margin-left:auto"><button class="btn-ghost btn-sm">${t('bd_dl')}</button></span></div>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-d"><svg width="14" height="14"><use href="#i-trash"/></svg> ${t('delete')}</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('m-bim-detail')">${t('close')}</button>
+      <button class="btn btn-p"><svg width="14" height="14"><use href="#i-edit"/></svg> ${t('edit')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD BIM -->
+<div class="overlay" id="m-bim-upload">
+  <div class="modal lg">
+    <div class="modal-hd">
+      <div><div class="modal-title">${t('bu_title')}</div><div class="modal-sub">${t('bu_sub')}</div></div>
+      <button class="modal-close" onclick="closeModal('m-bim-upload')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('bu_proj')} <span class="req">*</span></label><select class="form-select">${DB.projects.map(p=>`<option>${p.code} – ${p.name}</option>`).join('')}</select></div>
+        <div><label class="form-label">${t('bu_type')} <span class="req">*</span></label><select class="form-select"><option>${t('bim_indoor')}</option><option>${t('bim_outdoor')}</option></select></div>
+      </div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('bu_name')} <span class="req">*</span></label><input class="form-input" placeholder="Tòa A – F4"></div>
+        <div><label class="form-label">${t('bu_ver')} <span class="req">*</span></label><input class="form-input" placeholder="v1.0"></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('bu_desc')}</label><textarea class="form-textarea" placeholder="${t('bu_desc_ph')}"></textarea></div>
+      <div class="form-row">
+        <label class="form-label">${t('bu_bundle')} <span class="req">*</span></label>
+        <div class="upload">
+          <div class="u-icon"><svg width="36" height="36"><use href="#i-upload"/></svg></div>
+          <div class="u-text">${t('bu_drop_file')} <span style="color:var(--p);cursor:pointer">${t('bu_click')}</span></div>
+          <div class="u-hint">${t('bu_bundle_hint')}</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">${t('bu_prev')} <span class="req">*</span> <span class="text-sm">${t('bu_prev_req')}</span></label>
+        <div class="upload">
+          <div class="u-icon"><svg width="30" height="30"><use href="#i-image"/></svg></div>
+          <div class="u-text">${t('bu_drop_img')}</div>
+          <div class="u-hint">${t('bu_prev_hint')}</div>
+        </div>
+        <div class="preview-grid">
+          <div class="preview-item"><img src="${IMG.bimThumb[0]}" alt=""><button class="del"><svg width="12" height="12"><use href="#i-x"/></svg></button></div>
+          <div class="preview-item"><img src="${IMG.bimThumb[1]}" alt=""><button class="del"><svg width="12" height="12"><use href="#i-x"/></svg></button></div>
+          <div class="preview-item" style="border:2px dashed var(--bd);cursor:pointer;color:var(--tx2);display:flex;flex-direction:column;justify-content:center;align-items:center"><svg width="24" height="24"><use href="#i-plus"/></svg><div style="text-align:center;font-size:11px;margin-top:4px">${t('add')}</div></div>
+        </div>
+      </div>
+      <div class="flex-b" style="padding:12px 14px;background:var(--pl);border-radius:8px;border-left:3px solid var(--p)">
+        <div><div style="font-weight:600;font-size:13px">${t('bu_activate')}</div><div class="text-sm">${t('bu_activate_note')}</div></div>
+        <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('m-bim-upload')">${t('cancel')}</button>
+      <button class="btn btn-p" onclick="closeModal('m-bim-upload');toast('success',t('bu_uploading'))"><svg width="14" height="14"><use href="#i-upload"/></svg> Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW PROJECT -->
+<div class="overlay" id="m-project-new">
+  <div class="modal">
+    <div class="modal-hd">
+      <div><div class="modal-title">${t('pn_title')}</div><div class="modal-sub">${t('pn_sub')}</div></div>
+      <button class="modal-close" onclick="closeModal('m-project-new')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('pn_code')} <span class="req">*</span></label><input class="form-input" placeholder="PROJ005"></div>
+        <div><label class="form-label">${t('pn_st')}</label><select class="form-select"><option>${t('prj_st_plan')}</option><option>${t('prj_st_active')}</option><option>${t('prj_st_uat')}</option></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('pn_name')} <span class="req">*</span></label><input class="form-input"></div>
+      <div class="form-row"><label class="form-label">${t('pn_addr')}</label><input class="form-input"></div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('pn_owner')}</label><input class="form-input"></div>
+        <div><label class="form-label">${t('pn_contractor')}</label><input class="form-input"></div>
+      </div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('pn_start')}</label><input class="form-input" type="date"></div>
+        <div><label class="form-label">${t('pn_end')}</label><input class="form-input" type="date"></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('pn_engineer')}</label><select class="form-select">${DB.users.filter(u=>u.role==='engineer').map(u=>`<option>${u.name} (${u.email})</option>`).join('')}</select></div>
+      <div class="form-row"><label class="form-label">${t('pn_note')}</label><textarea class="form-textarea"></textarea></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('m-project-new')">${t('cancel')}</button>
+      <button class="btn btn-p" onclick="closeModal('m-project-new');toast('success',t('created'))">${t('pn_create')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW QR -->
+<div class="overlay" id="m-qr-new">
+  <div class="modal">
+    <div class="modal-hd">
+      <div><div class="modal-title">${t('qr_new')}</div></div>
+      <button class="modal-close" onclick="closeModal('m-qr-new')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('bu_proj')} <span class="req">*</span></label><select class="form-select">${DB.projects.map(p=>`<option>${p.code}</option>`).join('')}</select></div>
+        <div><label class="form-label">${t('ele_bim_model')} <span class="req">*</span></label><select class="form-select">${DB.bim.filter(b=>b.active).map(b=>`<option>${b.name}</option>`).join('')}</select></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('qr_code')} <span class="req">*</span></label><input class="form-input" value="PROJ001-F03-M003" style="font-family:monospace"></div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('qr_floor')}</label><input class="form-input" placeholder="Tầng 3"></div>
+        <div><label class="form-label">${t('qr_size')} (cm)</label><input class="form-input" type="number" value="20"></div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">${t('qr_pos')} <span class="req">*</span></label>
+        <div class="form-row-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:0">
+          <input class="form-input" placeholder="X" type="number" step="0.1">
+          <input class="form-input" placeholder="Y" type="number" step="0.1">
+          <input class="form-input" placeholder="Z" type="number" step="0.1">
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('m-qr-new')">${t('cancel')}</button>
+      <button class="btn"><svg width="14" height="14"><use href="#i-download"/></svg> PNG</button>
+      <button class="btn btn-p" onclick="closeModal('m-qr-new');toast('success',t('created'))">${t('save')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW GPS -->
+<div class="overlay" id="m-gps-new">
+  <div class="modal">
+    <div class="modal-hd">
+      <div><div class="modal-title">${t('gps_new')}</div></div>
+      <button class="modal-close" onclick="closeModal('m-gps-new')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('bu_proj')} <span class="req">*</span></label><select class="form-select">${DB.projects.map(p=>`<option>${p.code}</option>`).join('')}</select></div>
+        <div><label class="form-label">${t('gps_type')} <span class="req">*</span></label><select class="form-select"><option>${t('gps_manhole')}</option><option>${t('gps_sub_station')}</option><option>${t('gps_valve')}</option></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('gps_name')} <span class="req">*</span></label><input class="form-input"></div>
+      <div class="form-row-grid" style="grid-template-columns:1fr 1fr 1fr">
+        <div><label class="form-label">Lat</label><input class="form-input" type="number" step="0.000001" placeholder="21.028511"></div>
+        <div><label class="form-label">Lon</label><input class="form-input" type="number" step="0.000001" placeholder="105.804817"></div>
+        <div><label class="form-label">Alt (m)</label><input class="form-input" type="number" step="0.1"></div>
+      </div>
+      <div class="form-row"><label class="form-label">${t('pn_note')}</label><textarea class="form-textarea"></textarea></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('m-gps-new')">${t('cancel')}</button>
+      <button class="btn btn-p" onclick="closeModal('m-gps-new');toast('success',t('created'))">${t('save')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- FEEDBACK DETAIL -->
+<div class="overlay" id="m-feedback">
+  <div class="modal lg">
+    <div class="modal-hd">
+      <div>
+        <div class="modal-title" id="fb-title">Rò rỉ đường ống nước tầng 3</div>
+        <div class="modal-sub" id="fb-sub">FB-001 · PROJ001 · 14/07/2026</div>
+      </div>
+      <button class="modal-close" onclick="closeModal('m-feedback')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="grid-2">
+        <div>
+          <div class="card-sub mb-8" style="font-weight:600">📷 ${t('bd_photo')}</div>
+          <div class="gallery-main" style="aspect-ratio:4/3;margin-bottom:8px"><img src="${IMG.fb[0]}" alt="" loading="lazy"></div>
+          <div class="gallery-thumbs" style="grid-template-columns:repeat(3,1fr)">
+            <div class="t on"><img src="${IMG.fb[0]}" alt="" loading="lazy"></div>
+            <div class="t"><img src="${IMG.fb[1]}" alt="" loading="lazy"></div>
+            <div class="t"><img src="${IMG.fb[2]}" alt="" loading="lazy"></div>
+          </div>
+          <div class="card mt-16" style="padding:14px;margin-bottom:0;background:#F9FAFB">
+            <div class="card-sub mb-8" style="font-weight:600">📍 Vị trí</div>
+            <ul class="info-list">
+              <li><span>${t('qr_floor')}</span><b>Tầng 3, Khu Bắc</b></li>
+              <li><span>GPS</span><b style="font-family:monospace;font-size:12px">21.0285°N, 105.8048°E</b></li>
+              <li><span>QR</span><b style="font-family:monospace;font-size:12px">PROJ001-F03-M001</b></li>
+              <li><span>${t('ele_code')}</span><b>WAT-D90-F03-012</b></li>
+            </ul>
+          </div>
+        </div>
+        <div>
+          <div class="flex-b mb-16">
+            <span class="chip chip-yellow" style="font-size:12px;padding:5px 12px">${t('st_inprogress')}</span>
+            <div class="flex gap-8"><button class="btn btn-sm">${t('bd_change_st')}</button><button class="btn btn-sm btn-s"><svg width="12" height="12"><use href="#i-check"/></svg> ${t('st_resolved')}</button></div>
+          </div>
+          <div class="card" style="padding:14px;margin-bottom:12px">
+            <div class="card-sub mb-8" style="font-weight:600">${t('bd_desc')}</div>
+            <div style="font-size:13px;line-height:1.6">Phát hiện rò rỉ tại nối T90 ống nước D90, khu vực hành lang phía Bắc tầng 3. Nước chảy khoảng <b>5-10 giọt/phút</b>.</div>
+          </div>
+          <div class="card" style="padding:14px;margin-bottom:12px">
+            <div class="card-sub mb-8" style="font-weight:600">Assign</div>
+            <div class="form-row-grid" style="margin-bottom:0">
+              <div><label class="form-label">Người xử lý</label><select class="form-select">${DB.users.map(u=>`<option>${u.name}</option>`).join('')}</select></div>
+              <div><label class="form-label">Hạn</label><input class="form-input" type="date" value="2026-07-21"></div>
+            </div>
+          </div>
+          <div class="card" style="padding:14px">
+            <div class="card-sub mb-8" style="font-weight:600">💬 Comment</div>
+            <textarea class="form-textarea" placeholder="..."></textarea>
+            <div class="text-r mt-8"><button class="btn btn-sm btn-p">${t('bd_send')}</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn btn-d"><svg width="14" height="14"><use href="#i-trash"/></svg> ${t('delete')}</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('m-feedback')">${t('close')}</button>
+      <button class="btn btn-p" onclick="toast('success',t('saved'))">${t('save')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- NEW USER -->
+<div class="overlay" id="m-user-new">
+  <div class="modal">
+    <div class="modal-hd"><div><div class="modal-title">${t('user_new')}</div></div><button class="modal-close" onclick="closeModal('m-user-new')"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('user_col_user')} <span class="req">*</span></label><input class="form-input"></div>
+        <div><label class="form-label">Email <span class="req">*</span></label><input class="form-input" type="email"></div>
+      </div>
+      <div class="form-row-grid">
+        <div><label class="form-label">${t('user_col_role')} <span class="req">*</span></label><select class="form-select"><option>${t('user_role_eng')}</option><option>${t('user_role_bql')}</option><option>${t('user_role_bim')}</option><option>${t('user_role_admin')}</option><option>${t('user_role_view')}</option></select></div>
+        <div><label class="form-label">${t('set_lang_sys')}</label><select class="form-select"><option>${t('lang_vi')}</option><option>${t('lang_en')}</option><option>${t('lang_ja')}</option></select></div>
+      </div>
+      <div class="form-row"><label class="form-label">Phone</label><input class="form-input" placeholder="+84..."></div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('m-user-new')">${t('cancel')}</button>
+      <button class="btn btn-p" onclick="closeModal('m-user-new');toast('success',t('created'))"><svg width="14" height="14"><use href="#i-mail"/></svg> ${t('user_new')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT USER -->
+<div class="overlay" id="m-user-edit">
+  <div class="modal">
+    <div class="modal-hd"><div><div class="modal-title">${t('edit')} + ${t('user_col_role')}</div></div><button class="modal-close" onclick="closeModal('m-user-edit')"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <div class="tabs">
+        <button class="tab on" onclick="switchTab(this,'ue-info')">Info</button>
+        <button class="tab" onclick="switchTab(this,'ue-perm')">Permissions</button>
+      </div>
+      <div id="ue-info" class="tab-panel on">
+        <div class="form-row-grid">
+          <div><label class="form-label">${t('user_col_user')}</label><input class="form-input" value="Nguyễn Văn A"></div>
+          <div><label class="form-label">Email</label><input class="form-input" value="engineer01@rdsic.vn"></div>
+        </div>
+        <div class="form-row-grid">
+          <div><label class="form-label">${t('user_col_role')}</label><select class="form-select"><option>${t('user_role_eng')}</option></select></div>
+          <div><label class="form-label">${t('status')}</label><select class="form-select"><option>${t('user_st_active')}</option><option>${t('user_st_inactive')}</option></select></div>
+        </div>
+      </div>
+      <div id="ue-perm" class="tab-panel">
+        <div class="card-sub mb-8" style="font-weight:600">${t('bu_proj')}</div>
+        ${DB.projects.map((p,i)=>`<div class="flex-b" style="padding:8px 0;border-bottom:1px dashed var(--bd)"><span>${p.code} – ${p.name}</span><div class="toggle ${i<3?'on':''}" onclick="this.classList.toggle('on')"></div></div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn"><svg width="14" height="14"><use href="#i-cog"/></svg> Reset PW</button>
+      <div style="flex:1"></div>
+      <button class="btn" onclick="closeModal('m-user-edit')">${t('cancel')}</button>
+      <button class="btn btn-p" onclick="closeModal('m-user-edit');toast('success',t('saved'))">${t('save')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- PROJECT DETAIL -->
+<div class="overlay" id="m-project">
+  <div class="modal lg">
+    <div class="modal-hd">
+      <div><div class="modal-title" id="prj-title">Tòa nhà A</div><div class="modal-sub">PROJ001</div></div>
+      <button class="modal-close" onclick="closeModal('m-project')"><svg width="14" height="14"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="stats-grid" style="margin-bottom:16px">
+        <div class="stat"><div class="stat-info"><div class="lbl">${t('nav_bim')}</div><div class="val">3</div></div><div class="stat-icon purple"><svg width="22" height="22"><use href="#i-cube"/></svg></div></div>
+        <div class="stat"><div class="stat-info"><div class="lbl">${t('nav_qr')}</div><div class="val">45</div></div><div class="stat-icon green"><svg width="22" height="22"><use href="#i-qr"/></svg></div></div>
+        <div class="stat"><div class="stat-info"><div class="lbl">${t('nav_gps')}</div><div class="val">12</div></div><div class="stat-icon orange"><svg width="22" height="22"><use href="#i-map-pin"/></svg></div></div>
+        <div class="stat"><div class="stat-info"><div class="lbl">${t('dash_st4')}</div><div class="val" style="color:var(--d)">3</div></div><div class="stat-icon red"><svg width="22" height="22"><use href="#i-chat"/></svg></div></div>
+      </div>
+      <div class="tabs">
+        <button class="tab on" onclick="switchTab(this,'pd-info')">Info</button>
+        <button class="tab" onclick="switchTab(this,'pd-bim')">${t('nav_bim')}</button>
+        <button class="tab" onclick="switchTab(this,'pd-team')">Team</button>
+      </div>
+      <div id="pd-info" class="tab-panel on">
+        <ul class="info-list">
+          <li><span>${t('pn_code')}</span><b>PROJ001</b></li>
+          <li><span>${t('pn_owner')}</span><b>Công ty ABC</b></li>
+          <li><span>${t('pn_contractor')}</span><b>XYZ Construction</b></li>
+          <li><span>${t('pn_start')}</span><b>15/01/2026</b></li>
+          <li><span>${t('pn_end')}</span><b>30/12/2026</b></li>
+        </ul>
+      </div>
+      <div id="pd-bim" class="tab-panel">
+        <div class="grid-3">${DB.bim.filter(b=>b.project==='PROJ001').map(b=>`
+          <div class="card" style="padding:0;overflow:hidden;cursor:pointer" onclick="closeModal('m-project');openBim(${b.id})">
+            <div style="aspect-ratio:16/10;overflow:hidden"><img src="${b.img}" style="width:100%;height:100%;object-fit:cover" alt=""></div>
+            <div style="padding:12px"><div style="font-weight:600;font-size:13px">${b.name}</div><div class="text-sm">${b.version} · ${b.size}</div></div>
+          </div>`).join('')}</div>
+      </div>
+      <div id="pd-team" class="tab-panel">
+        ${DB.users.slice(0,4).map(u=>`<div class="flex-c gap-12" style="padding:10px 0;border-bottom:1px dashed var(--bd)"><div class="avatar">${initials(u.name)}</div><div style="flex:1"><div style="font-weight:600">${u.name}</div><div class="text-sm">${u.email}</div></div></div>`).join('')}
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn" onclick="closeModal('m-project')">${t('close')}</button>
+      <button class="btn btn-p" onclick="closeModal('m-project');openModal('m-bim-upload')"><svg width="14" height="14"><use href="#i-upload"/></svg> ${t('bim_upload')}</button>
+    </div>
+  </div>
+</div>
+
+<!-- ELEMENT DETAIL -->
+<div class="overlay" id="m-element-detail">
+  <div class="modal">
+    <div class="modal-hd"><div><div class="modal-title">${t('ele_code')}</div><div class="modal-sub" style="font-family:monospace">WAT-D90-F03-012</div></div><button class="modal-close" onclick="closeModal('m-element-detail')"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body">
+      <ul class="info-list">
+        <li><span>${t('ele_name')}</span><b>Ống nước D90</b></li>
+        <li><span>${t('ele_cat')}</span><b>💧 ${t('ele_water')}</b></li>
+        <li><span>${t('ele_maker')}</span><b>Bình Minh</b></li>
+        <li><span>${t('ele_bim_model')}</span><b><a style="color:var(--p);cursor:pointer" onclick="closeModal('m-element-detail');openBim(1)">Tòa A F3 v1.2</a></b></li>
+        <li><span>${t('status')}</span><b><span class="chip chip-green"><span class="dot"></span>${t('ele_st_active')}</span></b></li>
+        <li><span>${t('ele_fb')}</span><b><span class="chip chip-red">1</span></b></li>
+      </ul>
+    </div>
+    <div class="modal-ft"><button class="btn" onclick="closeModal('m-element-detail')">${t('close')}</button><button class="btn btn-p"><svg width="14" height="14"><use href="#i-edit"/></svg> ${t('edit')}</button></div>
+  </div>
+</div>
+
+<!-- PROFILE -->
+<div class="overlay" id="m-profile">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hd"><div><div class="modal-title">Profile</div></div><button class="modal-close" onclick="closeModal('m-profile')"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+    <div class="modal-body" style="text-align:center">
+      <div class="avatar" style="width:80px;height:80px;font-size:28px;margin:0 auto 12px">AT</div>
+      <div style="font-weight:700;font-size:16px">Anh Tuấn</div>
+      <div class="text-sm mb-16">admin@rdsic.vn · ${t('role_admin')}</div>
+      <div style="text-align:left;padding:16px;background:#F9FAFB;border-radius:10px">
+        <ul class="info-list">
+          <li><span>${t('user_col_last')}</span><b>20/07/2026 09:15</b></li>
+          <li><span>IP</span><b style="font-family:monospace;font-size:12px">113.166.10.5</b></li>
+          <li><span>2FA</span><b><span class="chip chip-green">ON</span></b></li>
+        </ul>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button class="btn"><svg width="14" height="14"><use href="#i-cog"/></svg> Change PW</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-d"><svg width="14" height="14"><use href="#i-log-out"/></svg> Logout</button>
+    </div>
+  </div>
+</div>
+  `;
+}
+
+// ============ HANDLERS ============
+function openBim(id){injectModals();openModal('m-bim-detail');const b=DB.bim.find(x=>x.id===id);if(b){document.getElementById('bd-title').textContent=b.name;document.getElementById('bd-sub').textContent=`${b.project} · ${b.version} · ${b.type==='indoor'?t('bim_indoor'):t('bim_outdoor')} · ${b.size} · ${b.date}`;document.getElementById('bd-note-count').textContent=b.notes;document.getElementById('bd-main-img').src=b.img}}
+function openProject(id){injectModals();openModal('m-project');const p=DB.projects.find(x=>x.id===id);if(p)document.getElementById('prj-title').textContent=p.name}
+function openFeedback(id){injectModals();openModal('m-feedback');const f=DB.feedback.find(x=>x.id===id);if(f){document.getElementById('fb-title').textContent=f.title;document.getElementById('fb-sub').textContent=`${f.id} · ${f.project} · ${f.user} · ${f.date}`}}
+function setGalleryThumb(el,idx,src){el.parentElement.querySelectorAll('.t').forEach(t=>t.classList.remove('on'));el.classList.add('on');document.getElementById('bd-gallery-idx').textContent=idx+1;document.getElementById('bd-main-img').src=src}
+
+// ============ INIT ============
+function init(){injectModals();render('dashboard')}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init)}else{init()}
+</script></body></html>
