@@ -8,6 +8,7 @@ import { initials } from '../../utils/helpers'
 import { useApp } from '../../context/AppContext'
 import { searchAll } from '../../api/misc'
 import LangSwitcher from '../LangSwitcher'
+import CompanyLogo from '../CompanyLogo'
 
 const TYPE_ROUTE = {
   project: '/',
@@ -131,14 +132,8 @@ export default function Header() {
           <Icon name="menu" size={20} />
         </button>
 
-        <Link to="/" className="flex items-center gap-2 sm:gap-2.5 min-w-0 no-underline text-text shrink-0">
-          <div className="w-8 h-8 sm:w-9 sm:h-9 bg-gradient-to-br from-primary to-primary-dark rounded-[9px] flex items-center justify-center text-white font-black text-sm sm:text-base">
-            R
-          </div>
-          <div className="block min-w-0">
-            <div className="font-bold text-sm sm:text-[15px] tracking-tight truncate">PA3 Admin</div>
-            <div className="text-[10px] sm:text-[11px] text-text-muted font-medium hidden sm:block">{t('brand_sub')}</div>
-          </div>
+        <Link to="/" className="flex items-center min-w-0 max-w-[min(100%,220px)] sm:max-w-[280px] md:max-w-[320px] no-underline shrink-0" title={t('brand_sub')}>
+          <CompanyLogo className="h-8 sm:h-9 md:h-10" />
         </Link>
 
         <div className="hidden lg:flex flex-1 max-w-[520px]">

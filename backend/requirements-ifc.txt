@@ -1,0 +1,2 @@
+# Tham chiếu / chạy CLI thủ công: backend/converter_core.py (IfcOpenShell).
+# Upload qua API dùng Node.js (src/ifc/* + src/utils/ifcConvert.js), không cần pip.

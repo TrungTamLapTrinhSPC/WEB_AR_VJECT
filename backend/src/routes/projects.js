@@ -5,7 +5,7 @@ import { config } from '../config/index.js'
 import { asyncHandler, AppError } from '../middleware/errorHandler.js'
 import { requireRole } from '../middleware/auth.js'
 import {
-  assertProjectAccess, isAdmin, isEngineer, seesAllProjects,
+  assertProjectAccess, assertCanAssignEngineers, isAdmin, isEngineer, seesAllProjects,
 } from '../middleware/projectAccess.js'
 import {
   buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
@@ -13,6 +13,7 @@ import {
 import {
   cacheGet, cacheSet, hashFilters, invalidateResource,
 } from '../utils/cache.js'
+import { ensureModelsProjectFolder, isS3Configured } from '../utils/s3.js'
 
 const router = Router()
 
@@ -37,8 +38,15 @@ async function listProjects(req, res) {
   let where = 'WHERE p.deleted_at IS NULL'
 
   if (isEngineer(role)) {
-    from += ' INNER JOIN project_users pu ON pu.project_id = p.id AND pu.user_id = ?'
-    params.push(userId)
+    from += ` INNER JOIN (
+      SELECT DISTINCT ap.project_id FROM (
+        SELECT project_id FROM project_users WHERE user_id = ?
+        UNION
+        SELECT pcg.project_id FROM project_company_groups pcg
+        INNER JOIN users u ON u.company_group_id = pcg.company_group_id AND u.id = ?
+      ) ap
+    ) access ON access.project_id = p.id`
+    params.push(userId, userId)
   }
 
   if (status) {
@@ -61,7 +69,11 @@ async function listProjects(req, res) {
             (SELECT COUNT(*) FROM feedbacks f
                JOIN bim_models bm ON bm.id = f.models_id
                WHERE bm.project_id = p.id AND f.deleted_at IS NULL
-                 AND f.status IN ('open','in_progress','pending')) AS open_feedback_count
+                 AND f.status IN ('open','in_progress','pending')) AS open_feedback_count,
+            (SELECT GROUP_CONCAT(cg.name ORDER BY cg.name SEPARATOR ', ')
+               FROM project_company_groups pcg
+               JOIN company_groups cg ON cg.id = pcg.company_group_id
+               WHERE pcg.project_id = p.id) AS assigned_group_names
      ${from}
      ${where}
      ORDER BY p.created_at DESC, p.id DESC
@@ -125,13 +137,21 @@ router.get('/:id/team', asyncHandler(async (req, res) => {
   await assertProjectAccess(req.user.sub, req.user.role, req.params.id)
 
   const rows = await query(
-    `SELECT u.id, u.email, u.full_name, u.role, pu.created_at AS assigned_at
+    `SELECT u.id, u.email, u.full_name, u.role, cg.name AS company_group_name, pu.created_at AS assigned_at
      FROM project_users pu
      JOIN users u ON u.id = pu.user_id
+     LEFT JOIN company_groups cg ON cg.id = u.company_group_id
      WHERE pu.project_id = ? AND u.deleted_at IS NULL`,
     [req.params.id],
   )
-  res.json({ data: rows })
+  const groups = await query(
+    `SELECT pcg.id, pcg.company_group_id, cg.name, pcg.created_at
+     FROM project_company_groups pcg
+     JOIN company_groups cg ON cg.id = pcg.company_group_id
+     WHERE pcg.project_id = ?`,
+    [req.params.id],
+  )
+  res.json({ data: rows, groups })
 }))
 
 router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
@@ -149,6 +169,14 @@ router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
       'INSERT INTO project_users (id, project_id, user_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())',
       [uuidv4(), id, engineerId],
     )
+  }
+
+  if (isS3Configured()) {
+    try {
+      await ensureModelsProjectFolder(id)
+    } catch (err) {
+      console.warn('[s3] ensureModelsProjectFolder:', err.message)
+    }
   }
 
   await invalidateResource('projects')
@@ -170,12 +198,23 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   res.json(await queryOne('SELECT * FROM projects WHERE id = ?', [req.params.id]))
 }))
 
-router.post('/:id/team', requireRole('admin'), asyncHandler(async (req, res) => {
+router.post('/:id/team', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
+  await assertCanAssignEngineers(req.user.sub, req.user.role)
+
   const { user_id } = req.body
   if (!user_id) throw new AppError('VALIDATION_ERROR', 'user_id is required')
 
   const project = await queryOne('SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL', [req.params.id])
   if (!project) throw new AppError('NOT_FOUND', 'Project not found', 404)
+
+  const target = await queryOne(
+    'SELECT id, role FROM users WHERE id = ? AND deleted_at IS NULL',
+    [user_id],
+  )
+  if (!target) throw new AppError('NOT_FOUND', 'User not found', 404)
+  if (target.role !== 'engineer') {
+    throw new AppError('VALIDATION_ERROR', 'Chỉ gán kỹ sư (engineer) vào dự án')
+  }
 
   const exists = await queryOne(
     'SELECT id FROM project_users WHERE project_id = ? AND user_id = ?',
@@ -192,8 +231,46 @@ router.post('/:id/team', requireRole('admin'), asyncHandler(async (req, res) => 
   res.status(201).json({ message: 'User assigned' })
 }))
 
-router.delete('/:id/team/:userId', requireRole('admin'), asyncHandler(async (req, res) => {
+router.delete('/:id/team/:userId', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
+  await assertCanAssignEngineers(req.user.sub, req.user.role)
   await query('DELETE FROM project_users WHERE project_id = ? AND user_id = ?', [req.params.id, req.params.userId])
+  await invalidateResource('projects', req.params.id)
+  res.status(204).send()
+}))
+
+router.post('/:id/groups', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
+  await assertCanAssignEngineers(req.user.sub, req.user.role)
+
+  const { company_group_id } = req.body
+  if (!company_group_id) throw new AppError('VALIDATION_ERROR', 'company_group_id is required')
+
+  const project = await queryOne('SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL', [req.params.id])
+  if (!project) throw new AppError('NOT_FOUND', 'Project not found', 404)
+
+  const group = await queryOne('SELECT id FROM company_groups WHERE id = ?', [company_group_id])
+  if (!group) throw new AppError('NOT_FOUND', 'Company group not found', 404)
+
+  const exists = await queryOne(
+    'SELECT id FROM project_company_groups WHERE project_id = ? AND company_group_id = ?',
+    [req.params.id, company_group_id],
+  )
+  if (!exists) {
+    await query(
+      'INSERT INTO project_company_groups (id, project_id, company_group_id, created_at) VALUES (?, ?, ?, NOW())',
+      [uuidv4(), req.params.id, company_group_id],
+    )
+  }
+
+  await invalidateResource('projects', req.params.id)
+  res.status(201).json({ message: 'Group assigned' })
+}))
+
+router.delete('/:id/groups/:groupId', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
+  await assertCanAssignEngineers(req.user.sub, req.user.role)
+  await query(
+    'DELETE FROM project_company_groups WHERE project_id = ? AND company_group_id = ?',
+    [req.params.id, req.params.groupId],
+  )
   await invalidateResource('projects', req.params.id)
   res.status(204).send()
 }))

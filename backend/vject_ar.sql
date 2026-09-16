@@ -180,6 +180,12 @@ CREATE TABLE `qr_markers` (
   `position_y` float DEFAULT NULL,
   `position_z` float DEFAULT NULL,
   `rotation_y` float DEFAULT NULL,
+  `marker_type` enum('field','tabletop') NOT NULL DEFAULT 'field',
+  `paper_size` varchar(20) DEFAULT 'A3',
+  `tabletop_scale` float DEFAULT 0.01,
+  `offset_to_center_x` float DEFAULT 0.15,
+  `offset_to_center_z` float DEFAULT -0.10,
+  `paper_rotation_y` float DEFAULT 0,
   `created_at` datetime NOT NULL,
   `updated_at` datetime NOT NULL,
   `deleted_at` datetime DEFAULT NULL

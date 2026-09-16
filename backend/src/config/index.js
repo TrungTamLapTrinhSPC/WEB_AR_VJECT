@@ -52,4 +52,35 @@ export const config = {
     dashboard: parseInt(process.env.CACHE_TTL_DASHBOARD || '120', 10),
     settings: parseInt(process.env.CACHE_TTL_SETTINGS || '600', 10),
   },
+
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
+    secure: process.env.SMTP_SECURE === 'true',
+    user: process.env.SMTP_USER || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM || 'PA3 Admin <noreply@localhost>',
+  },
+
+  aws: {
+    region: process.env.AWS_REGION || 'ap-southeast-1',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    s3Bucket: process.env.AWS_S3_BUCKET || '',
+  },
+
+
+  emailVerification: {
+    codeTtlMinutes: parseInt(process.env.EMAIL_CODE_TTL_MINUTES || '30', 10),
+    requireGmail: process.env.REQUIRE_GMAIL === 'true',
+  },
+
+  password: {
+    minLength: parseInt(process.env.PASSWORD_MIN_LENGTH || '8', 10),
+    requireUpper: process.env.PASSWORD_REQUIRE_UPPER !== 'false',
+    requireLower: process.env.PASSWORD_REQUIRE_LOWER !== 'false',
+    requireDigit: process.env.PASSWORD_REQUIRE_DIGIT !== 'false',
+    requireSpecial: process.env.PASSWORD_REQUIRE_SPECIAL !== 'false',
+  },
+
 }

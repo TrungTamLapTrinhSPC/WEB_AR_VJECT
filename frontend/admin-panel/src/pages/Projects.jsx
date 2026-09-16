@@ -21,7 +21,7 @@ const STATUS_LABEL = {
 export default function Projects() {
   const { t } = useI18n()
   const { openModal, projectsVersion } = useApp()
-  const { canManageProjects } = usePermissions()
+  const { canManageProjects, canManageProjectTeam } = usePermissions()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -80,6 +80,13 @@ export default function Projects() {
         </button>
       </div>
 
+      {canManageProjectTeam && (
+        <div className="card p-4 mb-4 text-sm leading-relaxed border border-border bg-[#F9FAFB]">
+          <div className="font-bold mb-1">{t('prj_team_help_title')}</div>
+          <p className="text-text-muted m-0">{t('prj_team_help_body')}</p>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-12 text-text-muted">{t('loading')}</div>
       ) : projects.length === 0 ? (
@@ -113,6 +120,24 @@ export default function Projects() {
                     <div><b className="text-text">{p.bim_count ?? 0}</b> <span className="text-xs text-text-muted">{t('prj_bim')}</span></div>
                     <div><b className="text-danger">{p.open_feedback_count ?? 0}</b> <span className="text-xs text-text-muted">{t('prj_open')}</span></div>
                   </div>
+                  {p.assigned_group_names ? (
+                    <div className="text-xs text-text-muted mt-2 pt-2 border-t border-dashed border-border">
+                      <span className="font-semibold text-text">{t('user_company_group')}:</span>{' '}
+                      {p.assigned_group_names}
+                    </div>
+                  ) : null}
+                  {canManageProjectTeam && (
+                    <button
+                      type="button"
+                      className="btn btn-sm w-full mt-3"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openModal('project', { id: p.id, tab: 'team' })
+                      }}
+                    >
+                      <Icon name="users" size={14} /> {t('prj_team_btn')}
+                    </button>
+                  )}
                 </div>
               </div>
             )

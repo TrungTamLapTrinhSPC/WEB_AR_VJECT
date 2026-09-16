@@ -164,7 +164,11 @@ Invalidate cache khi `POST` / `PATCH` / `DELETE` trên resource tương ứng.
 | GET | `/qr-markers/:id/qr-image` | Download PNG QR | — |
 | POST | `/qr-markers/import` | Import CSV | — |
 
-**GET `/qr-markers` filters:** `project_id`, `floor_level`, `search`
+**GET `/qr-markers` filters:** `project_id`, `floor_level`, `marker_type` (`field` \| `tabletop`), `search`
+
+**POST/PATCH body (AR):** `marker_type`, `paper_size`, `tabletop_scale`, `offset_to_center_x`, `offset_to_center_z`, `paper_rotation_y` (tabletop); plus `physical_width_m`, `bim_pos_*`, `floor_level`, …
+
+Migration: `migrations/004_qr_marker_tabletop.sql`
 
 ---
 

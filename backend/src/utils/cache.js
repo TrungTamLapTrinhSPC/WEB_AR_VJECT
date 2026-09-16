@@ -41,11 +41,12 @@ export async function cacheDel(...keys) {
 export async function cacheDelPattern(pattern) {
   try {
     const client = getRedis()
-    const keys = await client.keys(pattern)
-    if (keys.length) {
-      const stripped = keys.map((k) => k.replace(client.options.keyPrefix || '', ''))
-      await client.del(...stripped)
-    }
+    let cursor = '0'
+    do {
+      const [next, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 200)
+      cursor = next
+      if (keys.length) await client.del(...keys)
+    } while (cursor !== '0')
   } catch {
     // ignore
   }
@@ -67,5 +68,6 @@ export function withCache(key, ttl, fetcher) {
 
 export async function invalidateResource(resource, id = null) {
   await cacheDelPattern(`${resource}:list:*`)
+  if (resource === 'users') await cacheDel('users:stats')
   if (id) await cacheDel(`${resource}:${id}`)
 }

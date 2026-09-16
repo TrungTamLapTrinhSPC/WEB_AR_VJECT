@@ -3,7 +3,7 @@ import { useI18n } from '../context/I18nContext'
 import { useApp } from '../context/AppContext'
 import Icon from '../components/Icon'
 import { initials, parseJson } from '../utils/helpers'
-import { fetchFeedbackBoard, createFeedback } from '../api/feedbacks'
+import { fetchFeedbackBoard } from '../api/feedbacks'
 
 const COLS = {
   open: { c: '#EF4444', key: 'open' },
@@ -21,7 +21,7 @@ function mapPrio(p) {
 
 export default function Feedback() {
   const { t } = useI18n()
-  const { openModal, toast, dataVersion, refreshData } = useApp()
+  const { openModal, dataVersion } = useApp()
   const [board, setBoard] = useState({ open: [], in_progress: [], resolved: [], closed: [] })
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -60,19 +60,6 @@ export default function Feedback() {
 
   useEffect(() => { load() }, [load, dataVersion])
 
-  const handleCreate = async () => {
-    const title = window.prompt(t('fb_prompt_title'))
-    if (!title) return
-    const content = window.prompt(t('fb_prompt_content')) || title
-    try {
-      await createFeedback({ title, content, location_type: 'gps', priority: 'normal' })
-      toast('success', t('created'))
-      refreshData()
-    } catch (err) {
-      toast('err', err.message)
-    }
-  }
-
   return (
     <>
       <div className="page-hd">
@@ -82,7 +69,7 @@ export default function Feedback() {
         </div>
         <div className="flex gap-2">
           <button type="button" className="btn" onClick={load}><Icon name="refresh" size={14} /> {t('refresh')}</button>
-          <button type="button" className="btn btn-p" onClick={handleCreate}>
+          <button type="button" className="btn btn-p" onClick={() => openModal('feedback-new')}>
             <Icon name="plus" size={14} /> {t('fb_new')}
           </button>
         </div>
@@ -127,10 +114,17 @@ export default function Feedback() {
                       <span className="text-xs text-text-muted font-mono">{String(f.id).slice(0, 8)}</span>
                       <span className={`prio prio-${mapPrio(f.priority)}`}>{(f.priority || 'normal').toUpperCase()}</span>
                     </div>
-                    <div className="text-[13px] font-semibold mb-1.5 leading-snug">{f.title || '—'}</div>
-                    <div className="flex gap-2 text-[11px] text-text-muted items-center mt-2 pt-2 border-t border-dashed border-border">
+                    <div className="text-[13px] font-semibold mb-1.5 leading-snug">{f.title || t('fb_no_title')}</div>
+                    {f.content ? (
+                      <div className="text-[11px] text-text-muted line-clamp-2 mb-1">{f.content}</div>
+                    ) : null}
+                    {f.project_name ? (
+                      <div className="text-[11px] text-primary-dark font-medium mb-1">{f.project_name}</div>
+                    ) : null}
+                    <div className="flex gap-2 text-[11px] text-text-muted items-center mt-2 pt-2 border-t border-dashed border-border flex-wrap">
                       <div className="avatar w-5 h-5 text-[9px]">{initials(f.user_name)}</div>
                       <span>{f.user_name}</span>
+                      <span className="chip chip-gray text-[10px] py-0">{f.location_type || 'gps'}</span>
                       <span className="ml-auto">📷 {Array.isArray(images) ? images.length : 0}</span>
                     </div>
                   </div>

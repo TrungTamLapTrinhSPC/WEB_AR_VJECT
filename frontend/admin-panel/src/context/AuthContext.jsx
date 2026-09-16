@@ -37,12 +37,7 @@ export function AuthProvider({ children }) {
     return me
   }
 
-  const register = async (payload) => {
-    await apiRegister(payload)
-    const me = await getMe()
-    setUser(me)
-    return me
-  }
+  const register = async (payload) => apiRegister(payload)
 
   const logout = async () => {
     await apiLogout()

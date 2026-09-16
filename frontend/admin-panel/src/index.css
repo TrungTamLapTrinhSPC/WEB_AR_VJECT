@@ -253,6 +253,18 @@
   .form-input:focus, .form-select:focus, .form-textarea:focus {
     @apply outline-none border-primary ring-[3px] ring-primary/10;
   }
+  .password-field {
+    @apply relative;
+  }
+  .password-field-input {
+    @apply pr-10;
+  }
+  .password-field-toggle {
+    @apply absolute right-1 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-text-muted hover:text-text bg-transparent border-0 cursor-pointer transition-colors;
+  }
+  .password-field-toggle:focus-visible {
+    @apply outline-none ring-2 ring-primary/30;
+  }
   .form-textarea {
     @apply resize-y min-h-20;
   }
@@ -281,7 +293,8 @@
   }
 
   .tabs {
-    @apply flex gap-0.5 border-b border-border mb-4 overflow-x-auto;
+    /* overflow-x alone makes overflow-y auto → tiny vertical scrollbar on Windows */
+    @apply flex gap-0.5 border-b border-border mb-4 overflow-x-auto overflow-y-hidden;
   }
   .tab {
     @apply px-3.5 py-2.5 bg-transparent border-none text-[13px] font-semibold text-text-muted cursor-pointer border-b-2 border-transparent -mb-px transition-all whitespace-nowrap;

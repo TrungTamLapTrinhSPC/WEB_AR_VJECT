@@ -1,4 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_BASE || '/api/v1'
+/** Backend mounts routes under /api/v1 (see backend/src/index.js). */
+export function normalizeApiBase(raw) {
+  const base = (raw || '/api/v1').trim().replace(/\/$/, '')
+  if (!base.startsWith('http')) return base.endsWith('/api/v1') ? base : `${base}/api/v1`.replace('//api', '/api')
+  if (base.endsWith('/api/v1')) return base
+  return `${base}/api/v1`
+}
+
+export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE)
 
 class ApiError extends Error {
   constructor(code, message, status) {
@@ -8,7 +16,7 @@ class ApiError extends Error {
   }
 }
 
-function getTokens() {
+export function getTokens() {
   return {
     access: localStorage.getItem('access_token'),
     refresh: localStorage.getItem('refresh_token'),
@@ -46,20 +54,24 @@ async function refreshAccessToken() {
 }
 
 export async function apiFetch(path, options = {}) {
-  const { access } = getTokens()
+  const { skipAuth = false } = options
+  const { access } = skipAuth ? { access: null } : getTokens()
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   }
   if (access) headers.Authorization = `Bearer ${access}`
 
-  let res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const fetchOpts = { ...options }
+  delete fetchOpts.skipAuth
 
-  if (res.status === 401 && access) {
+  let res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+
+  if (!skipAuth && res.status === 401 && access) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers.Authorization = `Bearer ${newToken}`
-      res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+      res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
     }
   }
 
@@ -73,6 +85,32 @@ export async function apiFetch(path, options = {}) {
 }
 
 export { ApiError }
+
+/** Authenticated fetch; returns Blob (e.g. QR PNG). */
+export async function apiFetchBlob(path, options = {}) {
+  const { access } = getTokens()
+  const headers = { ...options.headers }
+  if (access) headers.Authorization = `Bearer ${access}`
+
+  const fetchOpts = { ...options }
+  delete fetchOpts.skipAuth
+
+  let res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+
+  if (res.status === 401 && access) {
+    const newToken = await refreshAccessToken()
+    if (newToken) {
+      headers.Authorization = `Bearer ${newToken}`
+      res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+    }
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new ApiError(data.error?.code || 'ERROR', data.error?.message || res.statusText, res.status)
+  }
+  return res.blob()
+}
 
 export function qs(params = {}) {
   const sp = new URLSearchParams()

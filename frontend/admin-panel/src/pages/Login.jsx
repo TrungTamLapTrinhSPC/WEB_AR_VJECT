@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useI18n } from '../context/I18nContext'
 import { ApiError } from '../api/client'
+import PasswordInput from '../components/PasswordInput'
 
 export default function Login() {
   const { login } = useAuth()
@@ -21,7 +22,11 @@ export default function Login() {
       await login(email, password)
       navigate('/', { replace: true })
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('login_failed'))
+      if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
+        setError(t('login_verify_required'))
+      } else {
+        setError(err instanceof ApiError ? err.message : t('login_failed'))
+      }
     } finally {
       setSubmitting(false)
     }
@@ -53,9 +58,7 @@ export default function Login() {
         </div>
         <div>
           <label className="form-label">{t('password')}</label>
-          <input
-            type="password"
-            className="form-input"
+          <PasswordInput
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required

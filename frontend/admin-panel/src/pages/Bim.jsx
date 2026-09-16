@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { useI18n } from '../context/I18nContext'
 import { useApp } from '../context/AppContext'
 import Icon from '../components/Icon'
-import { initials, formatDate, parseJson } from '../utils/helpers'
+import S3Image from '../components/S3Image'
+import { initials, formatDate } from '../utils/helpers'
+import { getBimFirstPreviewUrl } from '../utils/bimPreview'
 import { fetchBimModels } from '../api/bim'
 import { fetchProjects } from '../api/projects'
-import { IMG } from '../data/images'
 
 export default function Bim() {
   const { t } = useI18n()
@@ -82,9 +83,13 @@ export default function Bim() {
         <div className="text-center py-12 text-text-muted">{t('empty_bim')}</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map((b, i) => {
-            const files = parseJson(b.model_files, {})
-            const preview = files.preview_url || files.thumbnail_url || IMG.bim[i % IMG.bim.length]
+          {items.map((b) => {
+            const preview = getBimFirstPreviewUrl(b)
+            const previewFallback = (
+              <div className="w-full h-full min-h-[120px] flex items-center justify-center bg-[#F9FAFB]">
+                <Icon name="cube" size={32} className="opacity-40 text-text-muted" />
+              </div>
+            )
             return (
               <div
                 key={b.id}
@@ -95,7 +100,11 @@ export default function Bim() {
                 onKeyDown={(e) => e.key === 'Enter' && openModal('bim-detail', { id: b.id })}
               >
                 <div className="aspect-[16/10] relative overflow-hidden bg-border-light">
-                  <img src={preview} className="w-full h-full object-cover" alt="" loading="lazy" />
+                  <S3Image
+                    src={preview || ''}
+                    className="w-full h-full object-cover"
+                    fallback={previewFallback}
+                  />
                   <div className="absolute top-2.5 left-2.5 flex gap-1.5">
                     <span className="chip chip-blue bg-[rgba(227,242,253,.95)]">{b.discipline || 'other'}</span>
                     <span className="chip chip-green bg-[rgba(220,252,231,.95)]">{b.version}</span>

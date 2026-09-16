@@ -18,6 +18,8 @@ import searchRoutes from './routes/search.js'
 import settingsRoutes from './routes/settings.js'
 import auditRoutes from './routes/auditLogs.js'
 import elementsRoutes from './routes/elements.js'
+import companyGroupRoutes from './routes/companyGroups.js'
+import uploadRoutes from './routes/uploads.js'
 
 const app = express()
 
@@ -30,7 +32,11 @@ app.get('/health', (_req, res) => {
 
 app.use('/api/v1/auth', authRoutes)
 
-app.use('/api/v1', authenticate)
+// Auth routes apply `authenticate` per-handler; do not require JWT for all /auth/*
+app.use('/api/v1', (req, res, next) => {
+  if (req.path.startsWith('/auth')) return next()
+  return authenticate(req, res, next)
+})
 
 app.use('/api/v1/dashboard', dashboardRoutes)
 app.use('/api/v1/projects', projectRoutes)
@@ -43,6 +49,8 @@ app.use('/api/v1/search', searchRoutes)
 app.use('/api/v1/settings', settingsRoutes)
 app.use('/api/v1/audit-logs', auditRoutes)
 app.use('/api/v1/elements', elementsRoutes)
+app.use('/api/v1/company-groups', companyGroupRoutes)
+app.use('/api/v1/uploads', uploadRoutes)
 
 app.use(errorHandler)
 

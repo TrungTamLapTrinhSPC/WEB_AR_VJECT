@@ -40,3 +40,18 @@ export function assignEngineer(projectId, userId) {
     body: JSON.stringify({ user_id: userId }),
   })
 }
+
+export function removeTeamMember(projectId, userId) {
+  return apiFetch(`/projects/${projectId}/team/${userId}`, { method: 'DELETE' })
+}
+
+export function assignProjectGroup(projectId, companyGroupId) {
+  return apiFetch(`/projects/${projectId}/groups`, {
+    method: 'POST',
+    body: JSON.stringify({ company_group_id: companyGroupId }),
+  })
+}
+
+export function removeProjectGroup(projectId, companyGroupId) {
+  return apiFetch(`/projects/${projectId}/groups/${companyGroupId}`, { method: 'DELETE' })
+}

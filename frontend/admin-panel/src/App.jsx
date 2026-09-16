@@ -18,6 +18,7 @@ import Gps from './pages/Gps'
 import Elements from './pages/Elements'
 import Feedback from './pages/Feedback'
 import Users from './pages/Users'
+import CompanyGroups from './pages/CompanyGroups'
 import Settings from './pages/Settings'
 import Audit from './pages/Audit'
 import { getBasename } from './utils/basePath'
@@ -45,6 +46,7 @@ function AppShell() {
             <Route path="elements" element={<Elements />} />
             <Route path="feedback" element={<Feedback />} />
             <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
+            <Route path="groups" element={<AdminRoute><CompanyGroups /></AdminRoute>} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="audit" element={<AdminRoute><Audit /></AdminRoute>} />
           </Route>

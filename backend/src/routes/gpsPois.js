@@ -48,17 +48,18 @@ router.get('/map', asyncHandler(async (req, res) => {
 
 router.get('/', asyncHandler(async (req, res) => {
   const limit = clampLimit(req.query.limit)
-  const { model_id, type, search } = req.query
+  const { model_id, project_id, type, search } = req.query
   const cursor = req.query.cursor
   if (cursor && !decodeCursor(cursor)) throw new AppError('VALIDATION_ERROR', 'Invalid cursor')
 
-  const cacheKey = `gps-pois:list:${hashFilters({ model_id, type, search, cursor, limit })}`
+  const cacheKey = `gps-pois:list:${hashFilters({ model_id, project_id, type, search, cursor, limit })}`
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 
   const params = []
   let where = 'WHERE g.deleted_at IS NULL'
   if (model_id) { where += ' AND g.model_id = ?'; params.push(model_id) }
+  if (project_id) { where += ' AND b.project_id = ?'; params.push(project_id) }
   if (type) { where += ' AND g.type = ?'; params.push(type) }
   if (search) { where += ' AND g.name LIKE ?'; params.push(`%${search}%`) }
 

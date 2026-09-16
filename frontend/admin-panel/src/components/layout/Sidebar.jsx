@@ -3,6 +3,8 @@ import Icon from '../Icon'
 import { useI18n } from '../../context/I18nContext'
 import { usePermissions } from '../../hooks/usePermissions'
 import { useApp } from '../../context/AppContext'
+import CompanyLogo from '../CompanyLogo'
+import { Link } from 'react-router-dom'
 
 const NAV = [
   { section: 'nav_main', items: [
@@ -17,6 +19,7 @@ const NAV = [
   ]},
   { section: 'nav_ops', items: [
     { to: '/feedback', icon: 'chat', label: 'nav_feedback' },
+    { to: '/groups', icon: 'building', label: 'nav_groups', adminOnly: true },
     { to: '/users', icon: 'users', label: 'nav_users', adminOnly: true },
   ]},
   { section: 'nav_system', items: [
@@ -40,9 +43,11 @@ export default function Sidebar() {
         sidebarOpen ? 'translate-x-0 shadow-xl' : '-translate-x-full md:translate-x-0 md:shadow-none'
       }`}
     >
-      <div className="flex items-center justify-between px-5 pb-3 md:hidden">
-        <span className="text-sm font-bold">{t('menu')}</span>
-        <button type="button" className="btn-icon" onClick={closeSidebar} aria-label={t('close_menu')}>
+      <div className="flex items-center justify-between px-5 pb-3 mb-1 border-b border-border md:hidden">
+        <Link to="/" onClick={handleNav} className="min-w-0 flex-1 no-underline">
+          <CompanyLogo height={28} className="max-w-[200px]" />
+        </Link>
+        <button type="button" className="btn-icon shrink-0" onClick={closeSidebar} aria-label={t('close_menu')}>
           <Icon name="x" size={16} />
         </button>
       </div>

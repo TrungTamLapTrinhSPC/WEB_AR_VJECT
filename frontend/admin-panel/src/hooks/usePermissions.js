@@ -9,10 +9,11 @@ export function usePermissions() {
     isEngineer: role === 'engineer',
     isBql: role === 'bql',
     canManageProjects: role === 'admin',
+    /** Admin hoặc BQL được admin bật can_assign_engineers */
+    canManageProjectTeam: role === 'admin' || (role === 'bql' && !!user?.can_assign_engineers),
     canManageUsers: role === 'admin',
     canViewSettings: role === 'admin',
     canViewAudit: role === 'admin',
-    /** Engineer: only assigned project IDs from /auth/me */
     assignedProjectIds: user?.project_ids ?? [],
     canAccessProject: (projectId) => {
       if (role === 'admin' || role === 'bql') return true
