@@ -83,7 +83,14 @@ router.get('/', asyncHandler(async (req, res) => {
 }))
 
 router.get('/:id', asyncHandler(async (req, res) => {
-  const poi = await queryOne('SELECT * FROM gps_pois WHERE id = ? AND deleted_at IS NULL', [req.params.id])
+  const poi = await queryOne(
+    `SELECT g.*, b.name AS model_name, p.name AS project_name
+     FROM gps_pois g
+     LEFT JOIN bim_models b ON b.id = g.model_id
+     LEFT JOIN projects p ON p.id = b.project_id
+     WHERE g.id = ? AND g.deleted_at IS NULL`,
+    [req.params.id],
+  )
   if (!poi) throw new AppError('NOT_FOUND', 'GPS POI not found', 404)
   res.json(poi)
 }))
@@ -106,16 +113,48 @@ router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (re
 }))
 
 router.patch('/:id', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
+  const existing = await queryOne('SELECT id FROM gps_pois WHERE id = ? AND deleted_at IS NULL', [req.params.id])
+  if (!existing) throw new AppError('NOT_FOUND', 'GPS POI not found', 404)
+
   const { name, type, lat_wgs84, lng_wgs84, elevation, depth } = req.body
-  await query(
-    `UPDATE gps_pois SET name = COALESCE(?, name), type = COALESCE(?, type),
-      lat_wgs84 = COALESCE(?, lat_wgs84), lng_wgs84 = COALESCE(?, lng_wgs84),
-      elevation = COALESCE(?, elevation), depth = COALESCE(?, depth), updated_at = NOW()
-     WHERE id = ? AND deleted_at IS NULL`,
-    [name ?? null, type ?? null, lat_wgs84 ?? null, lng_wgs84 ?? null, elevation ?? null, depth ?? null, req.params.id],
-  )
+  const sets = []
+  const params = []
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'model_id')) {
+    sets.push('model_id = ?')
+    params.push(req.body.model_id || null)
+  }
+  if (name != null) { sets.push('name = ?'); params.push(name) }
+  if (type != null) { sets.push('type = ?'); params.push(type) }
+  if (lat_wgs84 != null) { sets.push('lat_wgs84 = ?'); params.push(lat_wgs84) }
+  if (lng_wgs84 != null) { sets.push('lng_wgs84 = ?'); params.push(lng_wgs84) }
+  if (elevation !== undefined) {
+    sets.push('elevation = ?')
+    params.push(elevation === '' || elevation === null ? null : elevation)
+  }
+  if (depth !== undefined) {
+    sets.push('depth = ?')
+    params.push(depth === '' || depth === null ? null : depth)
+  }
+
+  if (sets.length) {
+    sets.push('updated_at = NOW()')
+    await query(
+      `UPDATE gps_pois SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`,
+      [...params, req.params.id],
+    )
+  }
+
   await invalidateResource('gps-pois', req.params.id)
-  res.json(await queryOne('SELECT * FROM gps_pois WHERE id = ?', [req.params.id]))
+  const poi = await queryOne(
+    `SELECT g.*, b.name AS model_name, p.name AS project_name
+     FROM gps_pois g
+     LEFT JOIN bim_models b ON b.id = g.model_id
+     LEFT JOIN projects p ON p.id = b.project_id
+     WHERE g.id = ?`,
+    [req.params.id],
+  )
+  res.json(poi)
 }))
 
 router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {

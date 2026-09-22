@@ -5,6 +5,7 @@ import Icon from '../components/Icon'
 import ResponsiveTable from '../components/ResponsiveTable'
 import { fetchElements } from '../api/misc'
 import { fetchBimModels } from '../api/bim'
+import { elementBimLabel } from '../utils/elementBim'
 
 const CAT_CHIP = { electric: 'chip-yellow', water: 'chip-blue', hvac: 'chip-green', fire: 'chip-red' }
 
@@ -60,7 +61,16 @@ export default function Elements() {
         </span>
       ),
     },
-    { id: 'bim', label: t('ele_bim_model'), className: 'text-xs text-text-muted', render: (e) => e.bim },
+    {
+      id: 'bim',
+      label: t('ele_bim_model'),
+      className: 'text-xs',
+      render: (e) => (
+        <span className={e.model_id ? 'text-text' : 'text-text-muted italic'}>
+          {elementBimLabel(e, t)}
+        </span>
+      ),
+    },
     { id: 'maker', label: t('ele_maker'), className: 'text-xs text-text-muted', render: (e) => e.maker },
     {
       id: 'status',
@@ -88,9 +98,22 @@ export default function Elements() {
           <div className="page-title">{t('ele_title')}</div>
           <div className="page-sub">{t('ele_sub')}</div>
         </div>
-        <button type="button" className="btn" onClick={load}>
-          <Icon name="refresh" size={14} /> {t('refresh')}
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          <button type="button" className="btn" onClick={load}>
+            <Icon name="refresh" size={14} /> {t('refresh')}
+          </button>
+          <button
+            type="button"
+            className="btn btn-p"
+            onClick={() => openModal('feedback-new', {
+              location_type: 'element',
+              models_id: modelId || undefined,
+              model_id: modelId || undefined,
+            })}
+          >
+            <Icon name="plus" size={14} /> {t('ele_new')}
+          </button>
+        </div>
       </div>
       <div className="toolbar">
         <div className="search">
@@ -119,9 +142,36 @@ export default function Elements() {
         emptyMessage={t('empty_elements')}
         onRowClick={(e) => openModal('element-detail', { id: e.id })}
         actions={(e) => (
-          <button type="button" className="btn-icon" onClick={() => openModal('element-detail', { id: e.id })}>
-            <Icon name="eye" size={16} />
-          </button>
+          <>
+            <button
+              type="button"
+              className="btn-icon"
+              title={t('qr_view')}
+              onClick={(ev) => { ev.stopPropagation(); openModal('element-detail', { id: e.id }) }}
+            >
+              <Icon name="eye" size={16} />
+            </button>
+            <button
+              type="button"
+              className="btn-icon"
+              title={t('ele_edit')}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                if (e.sample_feedback_id) {
+                  openModal('feedback', { id: e.sample_feedback_id })
+                } else {
+                  openModal('feedback-new', {
+                    location_type: 'element',
+                    element_guid: e.id,
+                    models_id: e.model_id || undefined,
+                    model_id: e.model_id || undefined,
+                  })
+                }
+              }}
+            >
+              <Icon name="edit" size={16} />
+            </button>
+          </>
         )}
       />
     </>

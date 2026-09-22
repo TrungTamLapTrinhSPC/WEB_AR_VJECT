@@ -23,13 +23,16 @@ import {
   createQrMarker, fetchQrMarker, updateQrMarker, fetchQrMarkerImageBlob, generateQrMarkerImage,
   downloadQrMarkerPng, openQrMarkerInNewTab,
 } from '../api/qr'
-import { fetchGpsPois, createGpsPoi } from '../api/gps'
+import { fetchGpsPois, createGpsPoi, fetchGpsPoi, updateGpsPoi } from '../api/gps'
 import { fetchQrMarkers } from '../api/qr'
 import { fetchFeedback, fetchFeedbacks, createFeedback, updateFeedback, deleteFeedback } from '../api/feedbacks'
 import { fetchElement } from '../api/misc'
 import { IMG } from '../data/images'
 import { initials, formatDate, formatDateTime, parseJson } from '../utils/helpers'
 import { getBimPreviewUrls } from '../utils/bimPreview'
+import { disciplineLabel } from '../utils/disciplineLabel'
+import { elementBimLabel } from '../utils/elementBim'
+import DisciplineSelect from './DisciplineSelect'
 import { withBase } from '../utils/basePath'
 import { fetchPasswordPolicy } from '../api/auth'
 import PasswordInput from './PasswordInput'
@@ -718,47 +721,188 @@ function GpsNewModal({ activeModal, closeModal, toast, t, refreshData }) {
         <ModalClose onClose={closeModal} />
       </div>
       <div className="modal-body">
-        <div className="form-row-grid">
-          <div>
-            <label className="form-label">{t('ele_bim_model')}</label>
-            <select className="form-select" value={modelId} onChange={(e) => setModelId(e.target.value)}>
-              <option value="">—</option>
-              {models.map((m) => <option key={m.id} value={m.id}>{m.name || m.version}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="form-label">{t('gps_type')} <span className="req">*</span></label>
-            <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
-              <option value="manhole">{t('gps_manhole')}</option>
-              <option value="pipe_junction">{t('gps_sub_station')}</option>
-              <option value="valve">{t('gps_valve')}</option>
-              <option value="cable_box">{t('gps_cable_box')}</option>
-            </select>
-          </div>
-        </div>
-        <div className="form-row">
-          <label className="form-label">{t('gps_name')} <span className="req">*</span></label>
-          <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="grid grid-cols-3 gap-3.5">
-          <div>
-            <label className="form-label">Lat <span className="req">*</span></label>
-            <input className="form-input" type="number" step="0.000001" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="21.028511" />
-          </div>
-          <div>
-            <label className="form-label">Lon <span className="req">*</span></label>
-            <input className="form-input" type="number" step="0.000001" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="105.804817" />
-          </div>
-          <div>
-            <label className="form-label">Alt (m)</label>
-            <input className="form-input" type="number" step="0.1" value={elevation} onChange={(e) => setElevation(e.target.value)} />
-          </div>
-        </div>
+        <GpsPoiFormFields
+          t={t}
+          models={models}
+          modelId={modelId}
+          setModelId={setModelId}
+          type={type}
+          setType={setType}
+          name={name}
+          setName={setName}
+          lat={lat}
+          setLat={setLat}
+          lng={lng}
+          setLng={setLng}
+          elevation={elevation}
+          setElevation={setElevation}
+        />
       </div>
       <div className="modal-ft">
         <button type="button" className="btn" onClick={closeModal}>{t('cancel')}</button>
         <button type="button" className="btn btn-p" disabled={submitting || !name.trim() || !lat || !lng} onClick={handleCreate}>
           {submitting ? '...' : t('save')}
+        </button>
+      </div>
+    </ModalOverlay>
+  )
+}
+
+function GpsPoiFormFields({
+  t, models, modelId, setModelId, type, setType, name, setName,
+  lat, setLat, lng, setLng, elevation, setElevation,
+  depth = '', setDepth = () => {}, showDepth = false,
+}) {
+  return (
+    <>
+      <div className="form-row-grid">
+        <div>
+          <label className="form-label">{t('ele_bim_model')}</label>
+          <select className="form-select" value={modelId} onChange={(e) => setModelId(e.target.value)}>
+            <option value="">—</option>
+            {models.map((m) => (
+              <option key={m.id} value={m.id}>{m.name || m.version}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="form-label">{t('gps_type')} <span className="req">*</span></label>
+          <select className="form-select" value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="manhole">{t('gps_manhole')}</option>
+            <option value="pipe_junction">{t('gps_sub_station')}</option>
+            <option value="valve">{t('gps_valve')}</option>
+            <option value="cable_box">{t('gps_cable_box')}</option>
+          </select>
+        </div>
+      </div>
+      <div className="form-row">
+        <label className="form-label">{t('gps_name')} <span className="req">*</span></label>
+        <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className={`grid gap-3.5 ${showDepth ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+        <div>
+          <label className="form-label">Lat <span className="req">*</span></label>
+          <input className="form-input" type="number" step="0.000001" value={lat} onChange={(e) => setLat(e.target.value)} placeholder="21.028511" />
+        </div>
+        <div>
+          <label className="form-label">Lon <span className="req">*</span></label>
+          <input className="form-input" type="number" step="0.000001" value={lng} onChange={(e) => setLng(e.target.value)} placeholder="105.804817" />
+        </div>
+        <div>
+          <label className="form-label">Alt (m)</label>
+          <input className="form-input" type="number" step="0.1" value={elevation} onChange={(e) => setElevation(e.target.value)} />
+        </div>
+        {showDepth && (
+          <div>
+            <label className="form-label">{t('gps_depth')}</label>
+            <input className="form-input" type="number" step="0.1" value={depth} onChange={(e) => setDepth(e.target.value)} />
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+function GpsEditModal({ activeModal, modalData, closeModal, toast, t, refreshData }) {
+  const poiId = modalData?.id
+  const [poi, setPoi] = useState(null)
+  const [models, setModels] = useState([])
+  const [modelId, setModelId] = useState('')
+  const [name, setName] = useState('')
+  const [type, setType] = useState('manhole')
+  const [lat, setLat] = useState('')
+  const [lng, setLng] = useState('')
+  const [elevation, setElevation] = useState('')
+  const [depth, setDepth] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    if (activeModal !== 'gps-edit' || !poiId) return
+    setLoading(true)
+    Promise.all([
+      fetchGpsPoi(poiId),
+      fetchBimModels({ limit: 100 }).catch(() => ({ data: [] })),
+    ])
+      .then(([data, modelsRes]) => {
+        setPoi(data)
+        setModels(modelsRes.data || [])
+        setModelId(data.model_id || '')
+        setName(data.name || '')
+        setType(data.type || 'manhole')
+        setLat(data.lat_wgs84 != null ? String(data.lat_wgs84) : '')
+        setLng(data.lng_wgs84 != null ? String(data.lng_wgs84) : '')
+        setElevation(data.elevation != null && data.elevation !== '' ? String(data.elevation) : '')
+        setDepth(data.depth != null && data.depth !== '' ? String(data.depth) : '')
+      })
+      .catch((err) => toast('err', err.message))
+      .finally(() => setLoading(false))
+  }, [activeModal, poiId, toast])
+
+  const handleSave = async () => {
+    if (!poiId || !name.trim() || lat === '' || lng === '') return
+    setSubmitting(true)
+    try {
+      const updated = await updateGpsPoi(poiId, {
+        model_id: modelId || null,
+        name: name.trim(),
+        type,
+        lat_wgs84: Number(lat),
+        lng_wgs84: Number(lng),
+        elevation: elevation === '' ? null : Number(elevation),
+        depth: depth === '' ? null : Number(depth),
+      })
+      setPoi(updated)
+      refreshData()
+      toast('success', t('saved'))
+      closeModal()
+    } catch (err) {
+      toast('err', err.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <ModalOverlay id="gps-edit" activeModal={activeModal} onClose={closeModal}>
+      <div className="modal-hd">
+        <div>
+          <div className="modal-title">{t('gps_edit')}</div>
+          <div className="modal-sub">
+            {poi?.project_name ? `${poi.project_name} · ` : ''}{poi?.name || poiId}
+          </div>
+        </div>
+        <ModalClose onClose={closeModal} />
+      </div>
+      <div className="modal-body">
+        {loading ? (
+          <div className="text-center py-8 text-text-muted">{t('loading')}</div>
+        ) : (
+          <GpsPoiFormFields
+            t={t}
+            models={models}
+            modelId={modelId}
+            setModelId={setModelId}
+            type={type}
+            setType={setType}
+            name={name}
+            setName={setName}
+            lat={lat}
+            setLat={setLat}
+            lng={lng}
+            setLng={setLng}
+            elevation={elevation}
+            setElevation={setElevation}
+            depth={depth}
+            setDepth={setDepth}
+            showDepth
+          />
+        )}
+      </div>
+      <div className="modal-ft">
+        <button type="button" className="btn" onClick={closeModal}>{t('cancel')}</button>
+        <button type="button" className="btn btn-p" disabled={submitting || loading || !name.trim() || lat === '' || lng === ''} onClick={handleSave}>
+          {submitting ? '...' : t('save_changes')}
         </button>
       </div>
     </ModalOverlay>
@@ -1045,12 +1189,14 @@ function ElementDetailModal({ activeModal, modalData, closeModal, openModal, toa
                   {el.model_id ? (
                     <button
                       type="button"
-                      className="text-primary cursor-pointer bg-transparent border-none p-0"
+                      className="text-primary-dark font-semibold cursor-pointer bg-transparent border-none p-0 hover:underline"
                       onClick={() => { closeModal(); openModal('bim-detail', { id: el.model_id }) }}
                     >
-                      {el.bim}
+                      {elementBimLabel(el, t)}
                     </button>
-                  ) : el.bim}
+                  ) : (
+                    <span className="text-text-muted font-normal">{t('ele_bim_unlinked')}</span>
+                  )}
                 </b>
               </li>
               <li>
@@ -1079,6 +1225,33 @@ function ElementDetailModal({ activeModal, modalData, closeModal, openModal, toa
       </div>
       <div className="modal-ft">
         <button type="button" className="btn" onClick={closeModal}>{t('close')}</button>
+        {el?.sample_feedback_id && (
+          <button
+            type="button"
+            className="btn btn-p"
+            onClick={() => {
+              closeModal()
+              openModal('feedback', { id: el.sample_feedback_id })
+            }}
+          >
+            <Icon name="edit" size={14} /> {t('ele_edit')}
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn"
+          onClick={() => {
+            closeModal()
+            openModal('feedback-new', {
+              location_type: 'element',
+              element_guid: el?.id || guid,
+              models_id: el?.model_id || undefined,
+              model_id: el?.model_id || undefined,
+            })
+          }}
+        >
+          <Icon name="plus" size={14} /> {t('ele_new')}
+        </button>
       </div>
     </ModalOverlay>
   )
@@ -1174,12 +1347,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
           </div>
           <div>
             <label className="form-label">{t('bu_type')} <span className="req">*</span></label>
-            <select className="form-select" value={discipline} onChange={(e) => setDiscipline(e.target.value)}>
-              <option value="architecture">{t('bim_indoor')}</option>
-              <option value="structural">{t('bim_outdoor')}</option>
-              <option value="mep">MEP</option>
-              <option value="other">Other</option>
-            </select>
+            <DisciplineSelect value={discipline} onChange={setDiscipline} required />
           </div>
         </div>
         <div className="form-row-grid">
@@ -1685,15 +1853,16 @@ function FeedbackNewModal({ activeModal, closeModal, toast, t, refreshData, moda
     setTitle('')
     setContent('')
     setPriority('normal')
-    setLocationType('gps')
+    const presetLoc = modalData?.location_type === 'element' ? 'element' : 'gps'
+    setLocationType(presetLoc)
     setLat('')
     setLng('')
-    setElementGuid('')
+    setElementGuid(modalData?.element_guid || '')
     setMarkerId('')
     setImageUrls([])
     setProjectId(modalData?.project_id || '')
     setProjectLabel(modalData?.project_name || '')
-    setModelId(modalData?.models_id || '')
+    setModelId(modalData?.models_id || modalData?.model_id || '')
     setModelLabel(modalData?.model_name || '')
     if (modalData?.project_id && !modalData?.project_name) {
       fetchProjects({ limit: 50 })
@@ -1711,17 +1880,21 @@ function FeedbackNewModal({ activeModal, closeModal, toast, t, refreshData, moda
         })
         .catch(() => {})
     }
-  }, [activeModal, modalData?.project_id, modalData?.models_id, modalData?.project_name, modalData?.model_name])
+  }, [activeModal, modalData?.project_id, modalData?.models_id, modalData?.model_id, modalData?.project_name, modalData?.model_name, modalData?.location_type, modalData?.element_guid])
 
   const handleCreate = async () => {
     if (!content.trim()) return
+    if (locationType === 'element' && !elementGuid.trim()) {
+      toast('err', t('ele_guid_required'))
+      return
+    }
     setSubmitting(true)
     try {
       await createFeedback({
         title: title.trim() || null,
         content: content.trim(),
         priority,
-        location_type: locationType,
+        location_type: locationType === 'element' ? 'gps' : locationType,
         models_id: modelId || null,
         lat: lat === '' ? null : Number(lat),
         lng: lng === '' ? null : Number(lng),
@@ -2704,7 +2877,7 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
     const m = parseJson(model.metadata, {}) || {}
     setEditName(model.name || '')
     setEditVersion(model.version || '')
-    setEditDiscipline(model.discipline || 'other')
+    setEditDiscipline(model.discipline_code || model.discipline || 'other')
     setEditDesc(m.description || '')
   }, [])
 
@@ -2775,7 +2948,7 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
         <div>
           <div className="modal-title">{bim?.name || '...'}</div>
           <div className="modal-sub">
-            {bim?.project_name} · {bim?.version} · {bim?.discipline} · {formatDate(bim?.uploaded_at || bim?.created_at)}
+            {bim?.project_name} · {bim?.version} · {disciplineLabel(bim)} · {formatDate(bim?.uploaded_at || bim?.created_at)}
           </div>
         </div>
         <ModalClose onClose={closeModal} />
@@ -2858,12 +3031,7 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
                         </div>
                         <div>
                           <label className="form-label">{t('bu_type')}</label>
-                          <select className="form-select" value={editDiscipline} onChange={(e) => setEditDiscipline(e.target.value)}>
-                            <option value="architecture">{t('bim_indoor')}</option>
-                            <option value="structural">{t('bim_outdoor')}</option>
-                            <option value="mep">MEP</option>
-                            <option value="other">Other</option>
-                          </select>
+                          <DisciplineSelect value={editDiscipline} onChange={setEditDiscipline} />
                         </div>
                       </div>
                       <div className="form-row mb-3">
@@ -2877,7 +3045,7 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
                       <ul className="info-list">
                         <li><span>{t('bd_proj')}</span><b>{bim.project_name}</b></li>
                         <li><span>{t('bd_ver')}</span><b>{bim.version}</b></li>
-                        <li><span>{t('bd_type')}</span><b>{bim.discipline}</b></li>
+                        <li><span>{t('bd_type')}</span><b>{disciplineLabel(bim)}</b></li>
                         <li><span>{t('bd_date')}</span><b>{formatDateTime(bim.uploaded_at || bim.created_at)}</b></li>
                       </ul>
                       {meta.description && (
@@ -3011,6 +3179,7 @@ export default function Modals() {
       <QrViewModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} openModal={openModal} />
       <QrEditModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
       <GpsNewModal activeModal={activeModal} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
+      <GpsEditModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
       <UserNewModal activeModal={activeModal} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} openModal={openModal} />
       <UserEditModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} openModal={openModal} dataVersion={dataVersion} />
       <ElementDetailModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} openModal={openModal} toast={toast} t={t} />

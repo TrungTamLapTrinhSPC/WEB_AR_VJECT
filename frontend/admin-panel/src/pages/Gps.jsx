@@ -4,7 +4,8 @@ import { useApp } from '../context/AppContext'
 import { usePermissions } from '../hooks/usePermissions'
 import Icon from '../components/Icon'
 import ResponsiveTable from '../components/ResponsiveTable'
-import { fetchGpsPois, fetchGpsMap, deleteGpsPoi } from '../api/gps'
+import GpsLeafletMap from '../components/GpsLeafletMap'
+import { fetchGpsPois, deleteGpsPoi } from '../api/gps'
 
 const TYPE_CHIP = {
   manhole: 'chip-orange',
@@ -16,12 +17,13 @@ const TYPE_CHIP = {
 export default function Gps() {
   const { t } = useI18n()
   const { openModal, toast, dataVersion, refreshData } = useApp()
-  const { canManageProjects } = usePermissions()
+  const { canManageProjects, isAdmin, isBql } = usePermissions()
+  const canEditGps = isAdmin || isBql
   const [items, setItems] = useState([])
-  const [features, setFeatures] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [type, setType] = useState('')
+  const [focusId, setFocusId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -29,12 +31,8 @@ export default function Gps() {
       const params = { limit: 50 }
       if (search) params.search = search
       if (type) params.type = type
-      const [list, map] = await Promise.all([
-        fetchGpsPois(params),
-        fetchGpsMap().catch(() => ({ features: [] })),
-      ])
+      const list = await fetchGpsPois(params)
       setItems(list.data || [])
-      setFeatures(map.features || [])
     } catch {
       setItems([])
     } finally {
@@ -49,10 +47,16 @@ export default function Gps() {
     try {
       await deleteGpsPoi(id)
       toast('success', t('deleted') || 'Đã xóa')
+      if (focusId === id) setFocusId(null)
       refreshData()
     } catch (err) {
       toast('err', err.message)
     }
+  }
+
+  const openPoi = (g, edit) => {
+    setFocusId(g.id)
+    if (edit && canEditGps) openModal('gps-edit', { id: g.id })
   }
 
   const columns = [
@@ -115,41 +119,48 @@ export default function Gps() {
             rowKey={(g) => g.id}
             loading={loading}
             emptyMessage={t('empty_poi')}
-            actions={canManageProjects ? (g) => (
-              <button type="button" className="btn-icon text-danger" onClick={() => handleDelete(g.id)}>
-                <Icon name="trash" size={16} />
-              </button>
-            ) : undefined}
+            onRowClick={(g) => openPoi(g, canEditGps)}
+            actions={(g) => (
+              <>
+                <button
+                  type="button"
+                  className="btn-icon"
+                  title={t('gps_map_focus')}
+                  onClick={(e) => { e.stopPropagation(); setFocusId(g.id) }}
+                >
+                  <Icon name="map-pin" size={16} />
+                </button>
+                {canEditGps && (
+                  <button
+                    type="button"
+                    className="btn-icon"
+                    title={t('gps_edit')}
+                    onClick={(e) => { e.stopPropagation(); openModal('gps-edit', { id: g.id }) }}
+                  >
+                    <Icon name="edit" size={16} />
+                  </button>
+                )}
+                {canManageProjects && (
+                  <button
+                    type="button"
+                    className="btn-icon text-danger"
+                    title={t('delete')}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(g.id) }}
+                  >
+                    <Icon name="trash" size={16} />
+                  </button>
+                )}
+              </>
+            )}
           />
         </div>
-        <div className="card p-0 overflow-hidden">
-          <div className="h-[280px] sm:h-[360px] lg:h-[500px] bg-gradient-to-br from-[#DDE7F5] to-[#C8DAF0] relative">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: 'linear-gradient(rgba(0,0,0,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.04) 1px, transparent 1px)',
-                backgroundSize: '40px 40px',
-              }}
-            />
-            {features.map((f, i) => {
-              const [lng, lat] = f.geometry?.coordinates || []
-              const left = 8 + ((Number(lng) % 1) * 80)
-              const top = 8 + ((Number(lat) % 1) * 80)
-              return (
-                <div
-                  key={f.properties?.id || i}
-                  title={f.properties?.name}
-                  className="absolute w-[22px] h-[22px] bg-warning rotate-45 border-[3px] border-white shadow-[0_0_0_2px_#F59E0B,0_2px_6px_rgba(0,0,0,.3)] cursor-pointer"
-                  style={{ top: `${top}%`, left: `${left}%` }}
-                />
-              )
-            })}
-            <div className="absolute top-3.5 left-3.5 bg-white px-3 py-2.5 rounded-lg shadow-[0_1px_3px_rgba(0,0,0,.1)] text-[11px]">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 bg-warning rotate-45" /> {features.length} POI
-              </div>
-            </div>
-          </div>
+        <div className="card p-0 overflow-hidden min-h-[280px] sm:min-h-[360px] lg:min-h-[500px]">
+          <GpsLeafletMap
+            markers={items}
+            focusId={focusId}
+            onMarkerClick={(g) => openPoi(g, false)}
+            poiCountLabel={`${items.length} POI`}
+          />
         </div>
       </div>
     </>

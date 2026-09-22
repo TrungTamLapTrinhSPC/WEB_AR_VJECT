@@ -7,6 +7,8 @@ import { initials, formatDate } from '../utils/helpers'
 import { getBimFirstPreviewUrl } from '../utils/bimPreview'
 import { fetchBimModels } from '../api/bim'
 import { fetchProjects } from '../api/projects'
+import { fetchDisciplines } from '../api/disciplines'
+import { disciplineLabel } from '../utils/disciplineLabel'
 
 export default function Bim() {
   const { t } = useI18n()
@@ -17,6 +19,7 @@ export default function Bim() {
   const [search, setSearch] = useState('')
   const [projectId, setProjectId] = useState('')
   const [discipline, setDiscipline] = useState('')
+  const [disciplines, setDisciplines] = useState([])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -37,6 +40,7 @@ export default function Bim() {
   useEffect(() => { load() }, [load, dataVersion])
   useEffect(() => {
     fetchProjects({ limit: 50 }).then((r) => setProjects(r.data || [])).catch(() => {})
+    fetchDisciplines().then((r) => setDisciplines(r.data || [])).catch(() => {})
   }, [])
 
   return (
@@ -68,10 +72,9 @@ export default function Bim() {
         </select>
         <select className="select" value={discipline} onChange={(e) => setDiscipline(e.target.value)}>
           <option value="">{t('bim_all_type')}</option>
-          <option value="architectural">{t('bim_indoor')}</option>
-          <option value="mep">{t('bim_outdoor')}</option>
-          <option value="structural">Structural</option>
-          <option value="other">Other</option>
+          {disciplines.map((d) => (
+            <option key={d.id} value={d.code}>{d.name}</option>
+          ))}
         </select>
         <button type="button" className="btn" onClick={load}>
           <Icon name="refresh" size={14} /> {t('refresh')}
@@ -106,7 +109,7 @@ export default function Bim() {
                     fallback={previewFallback}
                   />
                   <div className="absolute top-2.5 left-2.5 flex gap-1.5">
-                    <span className="chip chip-blue bg-[rgba(227,242,253,.95)]">{b.discipline || 'other'}</span>
+                    <span className="chip chip-blue bg-[rgba(227,242,253,.95)]">{disciplineLabel(b)}</span>
                     <span className="chip chip-green bg-[rgba(220,252,231,.95)]">{b.version}</span>
                   </div>
                 </div>

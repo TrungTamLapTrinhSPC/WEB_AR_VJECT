@@ -23,6 +23,23 @@ import {
   modelsObjectPrefix,
   uploadObject,
 } from '../utils/s3.js'
+import {
+  BIM_DISCIPLINE_FIELDS,
+  BIM_DISCIPLINE_JOIN,
+  normalizeDisciplineCode,
+  resolveDisciplineId,
+} from '../utils/disciplines.js'
+
+async function fetchBimRow(id) {
+  return queryOne(
+    `SELECT b.*, p.name AS project_name, ${BIM_DISCIPLINE_FIELDS}
+     FROM bim_models b
+     JOIN projects p ON p.id = b.project_id
+     ${BIM_DISCIPLINE_JOIN}
+     WHERE b.id = ? AND b.deleted_at IS NULL`,
+    [id],
+  )
+}
 
 const router = Router()
 
@@ -61,7 +78,10 @@ router.get('/', asyncHandler(async (req, res) => {
   let where = 'WHERE b.deleted_at IS NULL'
 
   if (project_id) { where += ' AND b.project_id = ?'; params.push(project_id) }
-  if (discipline) { where += ' AND b.discipline = ?'; params.push(discipline) }
+  if (discipline) {
+    where += ' AND d.code = ?'
+    params.push(normalizeDisciplineCode(discipline))
+  }
   if (search) {
     where += ' AND (b.name LIKE ? OR b.version LIKE ?)'
     params.push(`%${search}%`, `%${search}%`)
@@ -72,10 +92,11 @@ router.get('/', asyncHandler(async (req, res) => {
   params.push(...cursorParams, limit + 1)
 
   const rows = await query(
-    `SELECT b.id, b.project_id, b.name, b.version, b.discipline, b.model_files, b.metadata,
-            b.uploaded_at, b.created_at, p.name AS project_name
+    `SELECT b.id, b.project_id, b.name, b.version, b.discipline_id, b.model_files, b.metadata,
+            b.uploaded_at, b.created_at, p.name AS project_name, ${BIM_DISCIPLINE_FIELDS}
      FROM bim_models b
      JOIN projects p ON p.id = b.project_id
+     ${BIM_DISCIPLINE_JOIN}
      ${where}
      ORDER BY b.created_at DESC, b.id DESC
      LIMIT ?`,
@@ -112,7 +133,10 @@ router.post(
     const project_id = req.body.project_id
     const name = req.body.name?.trim() || null
     const version = req.body.version?.trim()
-    const discipline = req.body.discipline || 'architecture'
+    const disciplineId = await resolveDisciplineId(queryOne, {
+      discipline: req.body.discipline || 'architecture',
+      discipline_id: req.body.discipline_id,
+    })
     const description = req.body.description?.trim() || ''
 
     if (!project_id || !version) {
@@ -206,15 +230,15 @@ router.post(
       }
 
       await query(
-        `INSERT INTO bim_models (id, project_id, name, version, discipline, model_files, metadata, uploaded_at, created_at, updated_at)
+        `INSERT INTO bim_models (id, project_id, name, version, discipline_id, model_files, metadata, uploaded_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
-        [modelId, project_id, name, version, discipline,
+        [modelId, project_id, name, version, disciplineId,
           JSON.stringify(modelFiles),
           JSON.stringify(dbMetadata)],
       )
 
       await invalidateResource('bim-models')
-      const model = await queryOne('SELECT * FROM bim_models WHERE id = ?', [modelId])
+      const model = await fetchBimRow(modelId)
       res.status(201).json(model)
     } catch (err) {
       console.error('[upload-ifc] upload/db:', err)
@@ -232,12 +256,7 @@ router.get('/:id', asyncHandler(async (req, res) => {
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 
-  const model = await queryOne(
-    `SELECT b.*, p.name AS project_name
-     FROM bim_models b JOIN projects p ON p.id = b.project_id
-     WHERE b.id = ? AND b.deleted_at IS NULL`,
-    [req.params.id],
-  )
+  const model = await fetchBimRow(req.params.id)
   if (!model) throw new AppError('NOT_FOUND', 'BIM model not found', 404)
 
   await cacheSet(cacheKey, model, config.cache.detail)
@@ -285,43 +304,49 @@ router.get('/:id/feedbacks', asyncHandler(async (req, res) => {
 }))
 
 router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {
-  const { project_id, name, version, discipline = 'other', model_files, metadata } = req.body
+  const { project_id, name, version, discipline, discipline_id, model_files, metadata } = req.body
   if (!project_id || !version) throw new AppError('VALIDATION_ERROR', 'project_id and version required')
+
+  const resolvedDisciplineId = await resolveDisciplineId(queryOne, { discipline, discipline_id })
 
   const id = uuidv4()
   await query(
-    `INSERT INTO bim_models (id, project_id, name, version, discipline, model_files, metadata, uploaded_at, created_at, updated_at)
+    `INSERT INTO bim_models (id, project_id, name, version, discipline_id, model_files, metadata, uploaded_at, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
-    [id, project_id, name || null, version, discipline,
+    [id, project_id, name || null, version, resolvedDisciplineId,
       model_files ? JSON.stringify(model_files) : null,
       metadata ? JSON.stringify(metadata) : null],
   )
 
   await invalidateResource('bim-models')
-  const model = await queryOne('SELECT * FROM bim_models WHERE id = ?', [id])
-  res.status(201).json(model)
+  res.status(201).json(await fetchBimRow(id))
 }))
 
 router.patch('/:id', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
-  const { name, version, discipline, model_files, metadata } = req.body
+  const { name, version, discipline, discipline_id, model_files, metadata } = req.body
   const existing = await queryOne('SELECT id FROM bim_models WHERE id = ? AND deleted_at IS NULL', [req.params.id])
   if (!existing) throw new AppError('NOT_FOUND', 'BIM model not found', 404)
+
+  let nextDisciplineId = null
+  if (discipline_id != null || discipline != null) {
+    nextDisciplineId = await resolveDisciplineId(queryOne, { discipline, discipline_id })
+  }
 
   await query(
     `UPDATE bim_models SET
        name = COALESCE(?, name), version = COALESCE(?, version),
-       discipline = COALESCE(?, discipline),
+       discipline_id = COALESCE(?, discipline_id),
        model_files = COALESCE(?, model_files), metadata = COALESCE(?, metadata),
        updated_at = NOW()
      WHERE id = ?`,
-    [name ?? null, version ?? null, discipline ?? null,
+    [name ?? null, version ?? null, nextDisciplineId,
       model_files ? JSON.stringify(model_files) : null,
       metadata ? JSON.stringify(metadata) : null,
       req.params.id],
   )
 
   await invalidateResource('bim-models', req.params.id)
-  res.json(await queryOne('SELECT * FROM bim_models WHERE id = ?', [req.params.id]))
+  res.json(await fetchBimRow(req.params.id))
 }))
 
 router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {

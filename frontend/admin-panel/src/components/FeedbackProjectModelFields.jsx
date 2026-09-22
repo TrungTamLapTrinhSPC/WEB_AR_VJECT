@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { fetchProjects } from '../api/projects'
 import { fetchBimModels } from '../api/bim'
 import SearchPickerField from './SearchPickerField'
+import { disciplineLabel } from '../utils/disciplineLabel'
 
 export default function FeedbackProjectModelFields({
   t,
@@ -79,7 +80,7 @@ export default function FeedbackProjectModelFields({
     () => models.map((m) => ({
       id: m.id,
       label: m.name,
-      hint: `v${m.version}${m.discipline ? ` · ${m.discipline}` : ''}`,
+      hint: `v${m.version}${disciplineLabel(m) !== '—' ? ` · ${disciplineLabel(m)}` : ''}`,
     })),
     [models],
   )

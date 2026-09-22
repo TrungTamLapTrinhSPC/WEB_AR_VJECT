@@ -7,7 +7,7 @@ export default function AdminLayout() {
   const { sidebarOpen, closeSidebar } = useApp()
 
   return (
-    <div className="flex flex-col h-[100dvh] md:grid md:grid-cols-[240px_1fr] md:grid-rows-[60px_1fr]">
+    <div className="flex flex-col h-[100dvh] md:grid md:grid-cols-[240px_1fr] md:grid-rows-[auto_1fr]">
       <Header />
       {sidebarOpen && (
         <button

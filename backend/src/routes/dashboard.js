@@ -56,10 +56,11 @@ router.get('/recent-feedbacks', asyncHandler(async (req, res) => {
 router.get('/recent-bim', asyncHandler(async (req, res) => {
   const limit = clampLimit(req.query.limit, 10, 4)
   const rows = await query(
-    `SELECT b.id, b.name, b.version, b.discipline, b.uploaded_at, b.created_at,
-            p.name AS project_name
+    `SELECT b.id, b.name, b.version, b.discipline_id, b.uploaded_at, b.created_at,
+            p.name AS project_name, d.code AS discipline_code, d.name AS discipline_name, d.code AS discipline
      FROM bim_models b
      JOIN projects p ON p.id = b.project_id
+     LEFT JOIN disciplines d ON d.id = b.discipline_id
      WHERE b.deleted_at IS NULL
      ORDER BY b.created_at DESC
      LIMIT ?`,

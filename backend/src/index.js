@@ -19,6 +19,7 @@ import settingsRoutes from './routes/settings.js'
 import auditRoutes from './routes/auditLogs.js'
 import elementsRoutes from './routes/elements.js'
 import companyGroupRoutes from './routes/companyGroups.js'
+import disciplineRoutes from './routes/disciplines.js'
 import uploadRoutes from './routes/uploads.js'
 
 const app = express()
@@ -50,9 +51,22 @@ app.use('/api/v1/settings', settingsRoutes)
 app.use('/api/v1/audit-logs', auditRoutes)
 app.use('/api/v1/elements', elementsRoutes)
 app.use('/api/v1/company-groups', companyGroupRoutes)
+app.use('/api/v1/disciplines', disciplineRoutes)
 app.use('/api/v1/uploads', uploadRoutes)
 
 app.use(errorHandler)
+
+/** @type {import('http').Server | undefined} */
+let server
+
+async function shutdown() {
+  if (server) {
+    await new Promise((resolve) => server.close(() => resolve()))
+  }
+  await disconnectRedis()
+  await pool.end()
+  process.exit(0)
+}
 
 async function start() {
   try {
@@ -62,19 +76,44 @@ async function start() {
     console.warn('Redis unavailable — running without cache:', err.message)
   }
 
-  await pool.query('SELECT 1')
+  try {
+    await pool.query('SELECT 1')
+  } catch (err) {
+    const { host, port, database } = config.db
+    console.error(
+      `MySQL failed (${host}:${port}/${database}): ${err.message}`,
+    )
+    if (config.nodeEnv === 'development') {
+      console.error(
+        'Dev: point DB_HOST to 127.0.0.1 + DB_SSL=false for local MySQL, or allow your IP on the RDS security group.',
+      )
+    }
+    throw err
+  }
   console.log('MySQL connected')
 
-  app.listen(config.port, () => {
-    console.log(`PA3 Admin API running on http://localhost:${config.port}`)
-    console.log(`Docs: backend/API.md`)
+  await new Promise((resolve, reject) => {
+    server = app.listen(config.port, () => {
+      console.log(`PA3 Admin API running on http://localhost:${config.port}`)
+      console.log(`Docs: backend/API.md`)
+      resolve()
+    })
+    server.on('error', reject)
   })
 }
 
-process.on('SIGINT', async () => {
-  await disconnectRedis()
-  await pool.end()
-  process.exit(0)
+process.on('SIGINT', () => {
+  shutdown().catch((err) => {
+    console.error('Shutdown error:', err)
+    process.exit(1)
+  })
+})
+
+process.on('SIGTERM', () => {
+  shutdown().catch((err) => {
+    console.error('Shutdown error:', err)
+    process.exit(1)
+  })
 })
 
 start().catch((err) => {

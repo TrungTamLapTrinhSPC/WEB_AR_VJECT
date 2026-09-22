@@ -45,7 +45,7 @@ export default function Sidebar() {
     >
       <div className="flex items-center justify-between px-5 pb-3 mb-1 border-b border-border md:hidden">
         <Link to="/" onClick={handleNav} className="min-w-0 flex-1 no-underline">
-          <CompanyLogo height={28} className="max-w-[200px]" />
+          <CompanyLogo preset="sidebar" className="max-w-[280px]" />
         </Link>
         <button type="button" className="btn-icon shrink-0" onClick={closeSidebar} aria-label={t('close_menu')}>
           <Icon name="x" size={16} />

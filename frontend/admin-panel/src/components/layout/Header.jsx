@@ -122,7 +122,7 @@ export default function Header() {
 
   return (
     <header className="md:col-span-2 md:row-start-1 bg-card border-b border-border flex flex-col z-[100] shadow-[0_1px_3px_rgba(0,0,0,.06)] shrink-0">
-      <div className="flex items-center px-3 sm:px-4 md:px-6 gap-2 sm:gap-3 md:gap-5 min-h-[56px] md:min-h-[60px]">
+      <div className="flex items-center px-3 sm:px-4 md:px-6 gap-2 sm:gap-3 md:gap-5 min-h-[60px] md:min-h-[68px]">
         <button
           type="button"
           className="btn-icon md:hidden shrink-0"
@@ -132,8 +132,8 @@ export default function Header() {
           <Icon name="menu" size={20} />
         </button>
 
-        <Link to="/" className="flex items-center min-w-0 max-w-[min(100%,220px)] sm:max-w-[280px] md:max-w-[320px] no-underline shrink-0" title={t('brand_sub')}>
-          <CompanyLogo className="h-8 sm:h-9 md:h-10" />
+        <Link to="/" className="flex items-center min-w-0 max-w-[min(100%,300px)] sm:max-w-[380px] md:max-w-[480px] no-underline shrink-0" title={t('brand_sub')}>
+          <CompanyLogo preset="header" />
         </Link>
 
         <div className="hidden lg:flex flex-1 max-w-[520px]">

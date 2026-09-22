@@ -155,10 +155,11 @@
   }
 
   .select {
-    @apply py-2 pl-3 pr-8 border border-border rounded-lg bg-white text-[13px] cursor-pointer text-text appearance-none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");
+    @apply py-2 pl-3 pr-11 border border-border rounded-lg bg-white text-[13px] cursor-pointer text-text appearance-none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.75' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
     background-position: right 10px center;
     background-repeat: no-repeat;
+    background-size: 20px 20px;
   }
   .select:focus {
     @apply outline-none border-primary;
@@ -250,6 +251,13 @@
   .form-input, .form-select, .form-textarea {
     @apply w-full py-2.5 px-3 border border-border rounded-lg text-[13px] bg-white transition-colors;
   }
+  .form-select {
+    @apply pr-11 appearance-none cursor-pointer;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2.75' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+    background-position: right 10px center;
+    background-repeat: no-repeat;
+    background-size: 20px 20px;
+  }
   .form-input:focus, .form-select:focus, .form-textarea:focus {
     @apply outline-none border-primary ring-[3px] ring-primary/10;
   }
@@ -326,6 +334,58 @@
   }
   .col-card:hover {
     @apply border-primary shadow-sm -translate-y-px;
+  }
+  .col-card-draggable {
+    @apply cursor-grab active:cursor-grabbing;
+  }
+  .col-card-dragging {
+    @apply opacity-45 scale-[0.98] border-primary border-dashed shadow-none;
+  }
+  .col-card-grip {
+    @apply text-[10px] tracking-tighter leading-none select-none opacity-50 ml-auto mr-1;
+  }
+  .board-kanban .col-kanban {
+    @apply transition-[box-shadow,background-color] duration-150;
+  }
+  .board-kanban .col-kanban-drop {
+    @apply ring-2 ring-primary/35 bg-primary-light/40;
+  }
+  .col-body {
+    @apply flex flex-col;
+  }
+  .col-empty {
+    @apply text-xs text-text-muted text-center py-8 px-2 border border-dashed border-border rounded-lg bg-white/60;
+  }
+
+  .gps-leaflet-wrap {
+    @apply relative w-full h-full min-h-[280px];
+  }
+  .gps-leaflet-map {
+    @apply w-full h-full min-h-[280px] sm:min-h-[360px] lg:min-h-[500px] z-0;
+  }
+  .gps-leaflet-marker {
+    background: transparent;
+    border: none;
+  }
+  .gps-leaflet-diamond {
+    display: block;
+    width: 22px;
+    height: 22px;
+    transform: rotate(45deg);
+    border: 3px solid #fff;
+    border-radius: 2px;
+  }
+  .gps-leaflet-badge {
+    @apply absolute top-3.5 left-3.5 z-[400] bg-white px-3 py-2.5 rounded-lg shadow-[0_1px_3px_rgba(0,0,0,.1)] text-[11px] pointer-events-none;
+  }
+  .gps-leaflet-badge-dot {
+    @apply inline-block w-2.5 h-2.5 bg-warning rotate-45 mr-1.5 align-middle;
+  }
+  .leaflet-control-zoom {
+    @apply border border-border rounded-lg overflow-hidden shadow-md;
+  }
+  .leaflet-control-zoom a {
+    @apply text-text font-bold leading-[26px];
   }
 
   .info-list {
