@@ -29,6 +29,13 @@ import {
   normalizeDisciplineCode,
   resolveDisciplineId,
 } from '../utils/disciplines.js'
+import {
+  createUploadSession,
+  saveChunk,
+  mergeChunksToFile,
+  removeSession,
+  CHUNK_SIZE_BYTES,
+} from '../utils/chunkUpload.js'
 
 async function fetchBimRow(id) {
   return queryOne(
@@ -57,6 +64,35 @@ const ifcMultipart = multer({
   }),
   limits: { fileSize: 500 * 1024 * 1024 },
 })
+
+const chunkMem = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: CHUNK_SIZE_BYTES + 1024 },
+})
+
+function handleChunkMulter(err, next) {
+  if (!err) return next()
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return next(new AppError('VALIDATION_ERROR', 'Chunk too large (max 5MB)', 413))
+  }
+  return next(new AppError('VALIDATION_ERROR', err.message || 'Chunk upload failed', 400))
+}
+
+async function saveChunkFromRequest(req, res) {
+  let buf = req.file?.buffer
+  if (!buf && Buffer.isBuffer(req.body) && req.body.length) {
+    buf = req.body
+  }
+  if (!buf?.length) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      'Chunk body empty — dùng POST multipart field "chunk" hoặc tăng nginx client_max_body_size',
+      400,
+    )
+  }
+  const result = await saveChunk(ifcUploadRoot, req.params.uploadId, req.params.index, buf)
+  res.json(result)
+}
 
 async function removePaths(paths) {
   await Promise.all(paths.filter(Boolean).map((p) => fs.unlink(p).catch(() => {})))
@@ -121,35 +157,194 @@ function handleIfcUpload(req, res, next) {
   })
 }
 
+function handlePreviewUpload(req, res, next) {
+  ifcMultipart.fields([{ name: 'preview', maxCount: 8 }])(req, res, (err) => {
+    if (!err) return next()
+    return next(new AppError('VALIDATION_ERROR', err.message || 'Upload failed', 400))
+  })
+}
+
+async function validateIfcUploadRequest(req, body) {
+  if (!isS3Configured()) {
+    throw new AppError('SERVICE_UNAVAILABLE', 'S3 chưa được cấu hình trên server', 503)
+  }
+
+  const project_id = body.project_id
+  const name = body.name?.trim() || null
+  const version = body.version?.trim()
+  const disciplineId = await resolveDisciplineId(queryOne, {
+    discipline: body.discipline || 'architecture',
+    discipline_id: body.discipline_id,
+  })
+  const description = body.description?.trim() || ''
+
+  if (!project_id || !version) {
+    throw new AppError('VALIDATION_ERROR', 'project_id and version required')
+  }
+
+  const project = await queryOne(
+    'SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL',
+    [project_id],
+  )
+  if (!project) throw new AppError('NOT_FOUND', 'Project not found', 404)
+
+  await assertProjectAccess(req.user.sub, req.user.role, project_id)
+
+  return { project_id, name, version, disciplineId, description }
+}
+
+async function processIfcAtPath(req, res, {
+  ifcPath, ifcOriginalName, previews, project_id, name, version, disciplineId, description,
+}) {
+  const modelId = uuidv4()
+  const workDir = path.join(ifcUploadRoot, modelId)
+  const cleanup = [ifcPath, ...previews.map((p) => p.path)]
+
+  let outputs
+  try {
+    await fs.mkdir(workDir, { recursive: true })
+    outputs = await convertIfcToOutputs(ifcPath, workDir, 'model')
+  } catch (err) {
+    console.error('[upload-ifc] conversion:', err)
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
+    await removePaths(cleanup)
+    throw new AppError('CONVERSION_FAILED', err.message || 'IFC conversion failed', 422)
+  }
+
+  const prefix = modelsObjectPrefix(project_id, modelId)
+  await ensureModelsProjectFolder(project_id)
+
+  const modelFiles = { s3_prefix: prefix }
+
+  try {
+    const ifcBuf = await fs.readFile(ifcPath)
+    const ifcUp = await uploadObject(`${prefix}/source.ifc`, ifcBuf, 'application/octet-stream')
+    modelFiles.ifc_url = ifcUp.publicUrl
+
+    const glbBuf = await fs.readFile(outputs.glbPath)
+    const glbUp = await uploadObject(`${prefix}/model.glb`, glbBuf, 'model/gltf-binary')
+    modelFiles.glb_url = glbUp.publicUrl
+    modelFiles.asset_bundle_url = glbUp.publicUrl
+
+    if (outputs.usdzPath) {
+      const usdzBuf = await fs.readFile(outputs.usdzPath)
+      const usdzUp = await uploadObject(`${prefix}/model.usdz`, usdzBuf, 'model/vnd.usdz+zip')
+      modelFiles.usdz_url = usdzUp.publicUrl
+    }
+
+    const metaRaw = await fs.readFile(outputs.metadataPath, 'utf8')
+    const metaUp = await uploadObject(`${prefix}/metadata.json`, metaRaw, 'application/json')
+    modelFiles.metadata_url = metaUp.publicUrl
+
+    const previewUrls = []
+    for (let i = 0; i < previews.length; i += 1) {
+      const prev = previews[i]
+      const ext = path.extname(prev.originalname).toLowerCase() || '.jpg'
+      const mime = prev.mimetype || 'image/jpeg'
+      const buf = await fs.readFile(prev.path)
+      const key = `${prefix}/preview-${i + 1}${ext}`
+      const up = await uploadObject(key, buf, mime)
+      previewUrls.push(up.publicUrl)
+    }
+    if (previewUrls.length) {
+      modelFiles.preview_urls = previewUrls
+      modelFiles.preview_url = previewUrls[0]
+    }
+
+    let fullMeta = {}
+    try {
+      fullMeta = JSON.parse(metaRaw)
+    } catch {
+      fullMeta = {}
+    }
+    const dbMetadata = {
+      description: description || undefined,
+      summary: fullMeta.summary,
+      preview_urls: previewUrls.length ? previewUrls : undefined,
+      metadata_url: modelFiles.metadata_url,
+    }
+
+    await query(
+      `INSERT INTO bim_models (id, project_id, name, version, discipline_id, model_files, metadata, uploaded_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
+      [modelId, project_id, name, version, disciplineId,
+        JSON.stringify(modelFiles),
+        JSON.stringify(dbMetadata)],
+    )
+
+    await invalidateResource('bim-models')
+    const model = await fetchBimRow(modelId)
+    res.status(201).json(model)
+  } catch (err) {
+    console.error('[upload-ifc] upload/db:', err)
+    if (err instanceof AppError) throw err
+    throw new AppError('UPLOAD_FAILED', err.message || 'S3 upload failed', 500)
+  } finally {
+    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
+    await removePaths(cleanup)
+  }
+}
+
+router.post(
+  '/upload-ifc/chunk-session',
+  requireRole('admin', 'bql', 'engineer'),
+  asyncHandler(async (req, res) => {
+    const { filename, fileSize } = req.body || {}
+    const session = await createUploadSession(ifcUploadRoot, {
+      filename: String(filename || ''),
+      fileSize: Number(fileSize),
+    })
+    res.status(201).json({
+      ...session,
+      chunkSize: CHUNK_SIZE_BYTES,
+    })
+  }),
+)
+
+router.put(
+  '/upload-ifc/chunk-session/:uploadId/chunk/:index',
+  requireRole('admin', 'bql', 'engineer'),
+  asyncHandler(saveChunkFromRequest),
+)
+
+router.post(
+  '/upload-ifc/chunk-session/:uploadId/chunk/:index',
+  requireRole('admin', 'bql', 'engineer'),
+  (req, res, next) => chunkMem.single('chunk')(req, res, (err) => handleChunkMulter(err, next)),
+  asyncHandler(saveChunkFromRequest),
+)
+
+router.post(
+  '/upload-ifc/chunk-session/:uploadId/complete',
+  requireRole('admin', 'bql', 'engineer'),
+  handlePreviewUpload,
+  asyncHandler(async (req, res) => {
+    const fields = await validateIfcUploadRequest(req, req.body)
+    const { uploadId } = req.params
+    const previews = req.files?.preview || []
+
+    let mergedPath
+    try {
+      const merged = await mergeChunksToFile(ifcUploadRoot, uploadId)
+      mergedPath = merged.mergedPath
+      await processIfcAtPath(req, res, {
+        ifcPath: mergedPath,
+        ifcOriginalName: merged.meta.filename,
+        previews,
+        ...fields,
+      })
+    } finally {
+      await removeSession(ifcUploadRoot, uploadId)
+    }
+  }),
+)
+
 router.post(
   '/upload-ifc',
   requireRole('admin', 'bql', 'engineer'),
   handleIfcUpload,
   asyncHandler(async (req, res) => {
-    if (!isS3Configured()) {
-      throw new AppError('SERVICE_UNAVAILABLE', 'S3 chưa được cấu hình trên server', 503)
-    }
-
-    const project_id = req.body.project_id
-    const name = req.body.name?.trim() || null
-    const version = req.body.version?.trim()
-    const disciplineId = await resolveDisciplineId(queryOne, {
-      discipline: req.body.discipline || 'architecture',
-      discipline_id: req.body.discipline_id,
-    })
-    const description = req.body.description?.trim() || ''
-
-    if (!project_id || !version) {
-      throw new AppError('VALIDATION_ERROR', 'project_id and version required')
-    }
-
-    const project = await queryOne(
-      'SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL',
-      [project_id],
-    )
-    if (!project) throw new AppError('NOT_FOUND', 'Project not found', 404)
-
-    await assertProjectAccess(req.user.sub, req.user.role, project_id)
+    const fields = await validateIfcUploadRequest(req, req.body)
 
     const ifcFile = req.files?.ifc?.[0]
     if (!ifcFile) throw new AppError('VALIDATION_ERROR', 'IFC file required')
@@ -160,96 +355,46 @@ router.post(
 
     const previews = req.files?.preview || []
 
-    const modelId = uuidv4()
-    const workDir = path.join(ifcUploadRoot, modelId)
-    const cleanup = [ifcFile.path, ...previews.map((p) => p.path)]
-
-    let outputs
-    try {
-      await fs.mkdir(workDir, { recursive: true })
-      outputs = await convertIfcToOutputs(ifcFile.path, workDir, 'model')
-    } catch (err) {
-      console.error('[upload-ifc] conversion:', err)
-      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
-      await removePaths(cleanup)
-      throw new AppError('CONVERSION_FAILED', err.message || 'IFC conversion failed', 422)
-    }
-
-    const prefix = modelsObjectPrefix(project_id, modelId)
-    await ensureModelsProjectFolder(project_id)
-
-    const modelFiles = { s3_prefix: prefix }
-
-    try {
-      const ifcBuf = await fs.readFile(ifcFile.path)
-      const ifcUp = await uploadObject(`${prefix}/source.ifc`, ifcBuf, 'application/octet-stream')
-      modelFiles.ifc_url = ifcUp.publicUrl
-
-      const glbBuf = await fs.readFile(outputs.glbPath)
-      const glbUp = await uploadObject(`${prefix}/model.glb`, glbBuf, 'model/gltf-binary')
-      modelFiles.glb_url = glbUp.publicUrl
-      modelFiles.asset_bundle_url = glbUp.publicUrl
-
-      if (outputs.usdzPath) {
-        const usdzBuf = await fs.readFile(outputs.usdzPath)
-        const usdzUp = await uploadObject(`${prefix}/model.usdz`, usdzBuf, 'model/vnd.usdz+zip')
-        modelFiles.usdz_url = usdzUp.publicUrl
-      }
-
-      const metaRaw = await fs.readFile(outputs.metadataPath, 'utf8')
-      const metaUp = await uploadObject(`${prefix}/metadata.json`, metaRaw, 'application/json')
-      modelFiles.metadata_url = metaUp.publicUrl
-
-      const previewUrls = []
-      for (let i = 0; i < previews.length; i += 1) {
-        const prev = previews[i]
-        const ext = path.extname(prev.originalname).toLowerCase() || '.jpg'
-        const mime = prev.mimetype || 'image/jpeg'
-        const buf = await fs.readFile(prev.path)
-        const key = `${prefix}/preview-${i + 1}${ext}`
-        const up = await uploadObject(key, buf, mime)
-        previewUrls.push(up.publicUrl)
-      }
-      if (previewUrls.length) {
-        modelFiles.preview_urls = previewUrls
-        modelFiles.preview_url = previewUrls[0]
-      }
-
-      let fullMeta = {}
-      try {
-        fullMeta = JSON.parse(metaRaw)
-      } catch {
-        fullMeta = {}
-      }
-      /** Full element list lives on S3 metadata.json — DB keeps summary only (avoids max_allowed_packet). */
-      const dbMetadata = {
-        description: description || undefined,
-        summary: fullMeta.summary,
-        preview_urls: previewUrls.length ? previewUrls : undefined,
-        metadata_url: modelFiles.metadata_url,
-      }
-
-      await query(
-        `INSERT INTO bim_models (id, project_id, name, version, discipline_id, model_files, metadata, uploaded_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())`,
-        [modelId, project_id, name, version, disciplineId,
-          JSON.stringify(modelFiles),
-          JSON.stringify(dbMetadata)],
-      )
-
-      await invalidateResource('bim-models')
-      const model = await fetchBimRow(modelId)
-      res.status(201).json(model)
-    } catch (err) {
-      console.error('[upload-ifc] upload/db:', err)
-      if (err instanceof AppError) throw err
-      throw new AppError('UPLOAD_FAILED', err.message || 'S3 upload failed', 500)
-    } finally {
-      await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
-      await removePaths(cleanup)
-    }
+    await processIfcAtPath(req, res, {
+      ifcPath: ifcFile.path,
+      ifcOriginalName: ifcName,
+      previews,
+      ...fields,
+    })
   }),
 )
+
+router.get('/:id/offline-manifest', asyncHandler(async (req, res) => {
+  const model = await fetchBimRow(req.params.id)
+  if (!model) throw new AppError('NOT_FOUND', 'BIM model not found', 404)
+
+  const assets = []
+  if (model.glb_url) assets.push({ type: 'glb', url: model.glb_url })
+  if (model.usdz_url) assets.push({ type: 'usdz', url: model.usdz_url })
+  if (model.asset_bundle_url) assets.push({ type: 'bundle', url: model.asset_bundle_url })
+  if (model.ifc_file_url) assets.push({ type: 'ifc', url: model.ifc_file_url })
+
+  let element_styles = []
+  try {
+    element_styles = await query(
+      `SELECT element_guid, color_hex, opacity_pct FROM bim_element_styles WHERE model_id = ?`,
+      [model.id],
+    )
+  } catch {
+    element_styles = []
+  }
+
+  res.json({
+    model_id: model.id,
+    project_id: model.project_id,
+    name: model.name,
+    version: model.version,
+    assets,
+    element_styles,
+    generated_at: new Date().toISOString(),
+    note: 'Mobile app: cache these URLs locally for offline drawing view.',
+  })
+}))
 
 router.get('/:id', asyncHandler(async (req, res) => {
   const cacheKey = `bim-models:${req.params.id}`

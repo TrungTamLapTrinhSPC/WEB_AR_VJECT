@@ -23,3 +23,14 @@ export function updateFeedback(id, body) {
 export function deleteFeedback(id) {
   return apiFetch(`/feedbacks/${id}`, { method: 'DELETE' })
 }
+
+export function fetchFeedbackComments(id) {
+  return apiFetch(`/feedbacks/${id}/comments`)
+}
+
+export function postFeedbackComment(id, body) {
+  return apiFetch(`/feedbacks/${id}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  })
+}

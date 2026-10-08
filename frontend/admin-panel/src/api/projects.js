@@ -6,6 +6,12 @@ export function fetchProjects(params = {}) {
   if (params.limit) qs.set('limit', String(params.limit))
   if (params.status) qs.set('status', params.status)
   if (params.search) qs.set('search', params.search)
+  if (params.company_group_id) qs.set('company_group_id', params.company_group_id)
+  if (params.attribute_group_id) qs.set('attribute_group_id', params.attribute_group_id)
+  if (params.start_date_from) qs.set('start_date_from', params.start_date_from)
+  if (params.start_date_to) qs.set('start_date_to', params.start_date_to)
+  if (params.end_date_from) qs.set('end_date_from', params.end_date_from)
+  if (params.end_date_to) qs.set('end_date_to', params.end_date_to)
   const query = qs.toString()
   return apiFetch(`/projects${query ? `?${query}` : ''}`)
 }
@@ -54,4 +60,15 @@ export function assignProjectGroup(projectId, companyGroupId) {
 
 export function removeProjectGroup(projectId, companyGroupId) {
   return apiFetch(`/projects/${projectId}/groups/${companyGroupId}`, { method: 'DELETE' })
+}
+
+export function assignProjectAttributeGroup(projectId, attributeGroupId) {
+  return apiFetch(`/projects/${projectId}/attribute-groups`, {
+    method: 'POST',
+    body: JSON.stringify({ attribute_group_id: attributeGroupId }),
+  })
+}
+
+export function removeProjectAttributeGroup(projectId, attributeGroupId) {
+  return apiFetch(`/projects/${projectId}/attribute-groups/${attributeGroupId}`, { method: 'DELETE' })
 }

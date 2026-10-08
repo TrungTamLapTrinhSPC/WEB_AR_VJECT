@@ -23,3 +23,7 @@ export function updateUser(id, body) {
 export function deleteUser(id) {
   return apiFetch(`/users/${id}`, { method: 'DELETE' })
 }
+
+export function setUserPassword(id, password) {
+  return apiFetch(`/users/${id}/password`, { method: 'PATCH', body: JSON.stringify({ password }) })
+}

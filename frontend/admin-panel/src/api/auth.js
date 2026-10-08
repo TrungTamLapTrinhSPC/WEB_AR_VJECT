@@ -3,10 +3,25 @@ import { apiFetch, setTokens, clearTokens, normalizeApiBase } from './client.js'
 const publicPost = (path, body) =>
   apiFetch(path, { method: 'POST', body: JSON.stringify(body), skipAuth: true })
 
-export async function login(email, password) {
-  const data = await publicPost('/auth/login', { email, password })
-  setTokens(data.access_token, data.refresh_token)
+export async function login(email, password, rememberMe = false) {
+  const data = await publicPost('/auth/login', { email, password, remember_me: rememberMe })
+  setTokens(data.access_token, data.refresh_token, { remember: rememberMe })
   return data
+}
+
+export async function forgotPassword(email) {
+  return publicPost('/auth/forgot-password', { email })
+}
+
+export async function resetPassword(token, password) {
+  return publicPost('/auth/reset-password', { token, password })
+}
+
+export async function changePassword(currentPassword, password) {
+  return apiFetch('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, password }),
+  })
 }
 
 export async function register(payload) {

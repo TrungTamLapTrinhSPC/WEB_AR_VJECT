@@ -4,8 +4,15 @@ export function fetchElements(params = {}) {
   return apiFetch(`/elements${qs(params)}`)
 }
 
-export function fetchElement(guid) {
-  return apiFetch(`/elements/${encodeURIComponent(guid)}`)
+export function fetchElement(guid, params = {}) {
+  return apiFetch(`/elements/${encodeURIComponent(guid)}${qs(params)}`)
+}
+
+export function updateElementStyle(guid, body) {
+  return apiFetch(`/elements/${encodeURIComponent(guid)}/style`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
 }
 
 export function fetchSettings() {

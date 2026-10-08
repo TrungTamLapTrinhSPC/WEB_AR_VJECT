@@ -552,3 +552,216 @@
 .page-enter {
   animation: fade 0.2s;
 }
+
+.fb-list-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.fb-list-section {
+  border: 1px solid var(--color-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--color-card);
+}
+
+.fb-list-section-hd {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.875rem;
+  padding: 0.65rem 1rem;
+  border-left: 4px solid;
+  background: var(--color-border-light);
+}
+
+.fb-list-section-count {
+  margin-left: auto;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.fb-list-section-body {
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fb-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.25rem;
+}
+
+.fb-tab {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-radius: 0.5rem 0.5rem 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fb-tab-active {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+}
+
+.fb-tab-count {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-border-light);
+}
+
+.fb-list-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+  border: 1px solid var(--color-border-light);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.fb-list-main {
+  flex: 1;
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.fb-list-main:hover {
+  background: var(--color-primary-light);
+}
+
+.fb-list-status {
+  width: 9.5rem;
+  min-width: 9.5rem;
+  border: 0;
+  border-left: 1px solid var(--color-border-light);
+  border-radius: 0;
+  font-size: 0.75rem;
+}
+
+.fb-comment-thread {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+  background: #f9fafb;
+  margin-bottom: 0.75rem;
+}
+
+.fb-comment-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed var(--color-border-light);
+  font-size: 0.8125rem;
+}
+
+.fb-comment-item:last-child {
+  border-bottom: 0;
+}
+
+.upload-donut-panel {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: var(--color-primary-light);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+}
+
+.upload-donut-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.upload-donut {
+  width: 8rem;
+  height: 8rem;
+  transform: rotate(-90deg);
+}
+
+.upload-donut-track {
+  fill: none;
+  stroke: var(--color-border);
+  stroke-width: 8;
+}
+
+.upload-donut-fill {
+  fill: none;
+  stroke: var(--color-primary);
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s ease;
+}
+
+.upload-donut-fill.is-processing {
+  stroke: var(--color-primary-dark);
+  animation: upload-donut-indeterminate 1.4s ease-in-out infinite;
+}
+
+.upload-donut-ring {
+  position: relative;
+  width: 8rem;
+  height: 8rem;
+}
+
+.upload-donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.upload-donut-pct {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.upload-donut-meta {
+  text-align: center;
+}
+
+.upload-donut-label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.upload-donut-sub {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 0.25rem;
+  word-break: break-all;
+}
+
+.upload-donut-eta {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-primary-dark);
+  margin-top: 0.4rem;
+}
+
+@keyframes upload-donut-indeterminate {
+  0% { stroke-dashoffset: 264; opacity: 0.85; }
+  50% { stroke-dashoffset: 66; opacity: 1; }
+  100% { stroke-dashoffset: 264; opacity: 0.85; }
+}

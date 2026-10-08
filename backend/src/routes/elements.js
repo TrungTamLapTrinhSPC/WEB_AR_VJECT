@@ -1,15 +1,17 @@
 import { Router } from 'express'
+import { v4 as uuidv4 } from 'uuid'
 import { query } from '../db/pool.js'
 import { config } from '../config/index.js'
-import { asyncHandler } from '../middleware/errorHandler.js'
+import { asyncHandler, AppError } from '../middleware/errorHandler.js'
+import { requireRole } from '../middleware/auth.js'
 import { clampLimit, paginatedResponse } from '../utils/cursor.js'
-import { cacheGet, cacheSet, hashFilters } from '../utils/cache.js'
+import { cacheGet, cacheSet, hashFilters, invalidateResource } from '../utils/cache.js'
 
 const router = Router()
 
 /**
  * Elements are derived from feedbacks.element_guid + BIM metadata.
- * Phase-1: no dedicated bim_elements table.
+ * Optional display style in bim_element_styles.
  */
 router.get('/', asyncHandler(async (req, res) => {
   const limit = clampLimit(req.query.limit, 100, 50)
@@ -42,10 +44,13 @@ router.get('/', asyncHandler(async (req, res) => {
             COUNT(*) AS fb_count,
             MAX(f.status) AS last_status,
             MAX(f.created_at) AS created_at,
-            MAX(f.id) AS sample_feedback_id
+            MAX(f.id) AS sample_feedback_id,
+            MAX(s.color_hex) AS color_hex,
+            MAX(s.opacity_pct) AS opacity_pct
      FROM feedbacks f
      LEFT JOIN bim_models b ON b.id = f.models_id AND b.deleted_at IS NULL
      LEFT JOIN disciplines d ON d.id = b.discipline_id
+     LEFT JOIN bim_element_styles s ON s.model_id = f.models_id AND s.element_guid = f.element_guid
      ${where}
      GROUP BY f.element_guid, f.models_id
      ORDER BY created_at DESC
@@ -64,6 +69,8 @@ router.get('/', asyncHandler(async (req, res) => {
     fb: Number(r.fb_count) || 0,
     sample_feedback_id: r.sample_feedback_id || null,
     created_at: r.created_at,
+    color_hex: r.color_hex || null,
+    opacity_pct: r.opacity_pct != null ? Number(r.opacity_pct) : 100,
   }))
 
   if (discipline) {
@@ -75,21 +82,61 @@ router.get('/', asyncHandler(async (req, res) => {
   res.json(result)
 }))
 
+router.patch('/:guid/style', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {
+  const guid = req.params.guid
+  const { model_id, color_hex, opacity_pct } = req.body
+  if (!model_id) throw new AppError('VALIDATION_ERROR', 'model_id is required')
+
+  const color = String(color_hex || '#3B82F6').trim()
+  if (!/^#[0-9A-Fa-f]{6}$/.test(color)) {
+    throw new AppError('VALIDATION_ERROR', 'color_hex must be #RRGGBB')
+  }
+  let opacity = Number(opacity_pct)
+  if (!Number.isFinite(opacity)) opacity = 100
+  opacity = Math.max(0, Math.min(100, Math.round(opacity)))
+
+  const existing = await query(
+    `SELECT id FROM bim_element_styles WHERE model_id = ? AND element_guid = ? LIMIT 1`,
+    [model_id, guid],
+  )
+
+  if (existing.length) {
+    await query(
+      `UPDATE bim_element_styles SET color_hex = ?, opacity_pct = ?, updated_at = NOW() WHERE model_id = ? AND element_guid = ?`,
+      [color, opacity, model_id, guid],
+    )
+  } else {
+    await query(
+      `INSERT INTO bim_element_styles (id, model_id, element_guid, color_hex, opacity_pct, updated_at)
+       VALUES (?, ?, ?, ?, ?, NOW())`,
+      [uuidv4(), model_id, guid, color, opacity],
+    )
+  }
+
+  await invalidateResource('elements')
+  res.json({ element_guid: guid, model_id, color_hex: color, opacity_pct: opacity })
+}))
+
 router.get('/:guid', asyncHandler(async (req, res) => {
   const guid = req.params.guid
+  const modelId = req.query.model_id
+
   const rows = await query(
     `SELECT f.id, f.title, f.content, f.priority, f.status, f.images, f.created_at,
             f.models_id, b.name AS bim_name, b.version AS bim_version,
             d.code AS discipline, d.name AS discipline_name,
-            u.full_name AS user_name
+            u.full_name AS user_name,
+            s.color_hex, s.opacity_pct
      FROM feedbacks f
      LEFT JOIN bim_models b ON b.id = f.models_id AND b.deleted_at IS NULL
      LEFT JOIN disciplines d ON d.id = b.discipline_id
      LEFT JOIN users u ON u.id = f.user_id
+     LEFT JOIN bim_element_styles s ON s.model_id = f.models_id AND s.element_guid = f.element_guid
      WHERE f.deleted_at IS NULL AND f.element_guid = ?
+     ${modelId ? 'AND f.models_id = ?' : ''}
      ORDER BY f.created_at DESC
      LIMIT 20`,
-    [guid],
+    modelId ? [guid, modelId] : [guid],
   )
 
   const first = rows[0]
@@ -97,23 +144,26 @@ router.get('/:guid', asyncHandler(async (req, res) => {
     id: guid,
     name: first?.title || guid,
     bim: formatBimLabel(first || {}),
-    model_id: first?.models_id || null,
+    model_id: first?.models_id || modelId || null,
     cat: mapDiscipline(first?.discipline),
     maker: '—',
     status: 'active',
     fb: rows.length,
     sample_feedback_id: first?.id || null,
+    color_hex: first?.color_hex || '#3B82F6',
+    opacity_pct: first?.opacity_pct != null ? Number(first.opacity_pct) : 100,
     feedbacks: rows,
   })
 }))
 
 function formatBimLabel(row) {
-  if (!row?.model_id) return null
+  if (!row?.model_id && !row?.models_id) return null
   const name = row.bim_name != null ? String(row.bim_name).trim() : ''
   const version = row.bim_version != null ? String(row.bim_version).trim() : ''
   if (name) return name
   if (version) return version
-  return `${String(row.model_id).slice(0, 8)}…`
+  const mid = row.model_id || row.models_id
+  return `${String(mid).slice(0, 8)}…`
 }
 
 function mapDiscipline(d) {

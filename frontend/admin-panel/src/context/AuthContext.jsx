@@ -30,8 +30,8 @@ export function AuthProvider({ children }) {
     loadUser()
   }, [loadUser])
 
-  const login = async (email, password) => {
-    await apiLogin(email, password)
+  const login = async (email, password, rememberMe = false) => {
+    await apiLogin(email, password, rememberMe)
     const me = await getMe()
     setUser(me)
     return me

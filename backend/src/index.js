@@ -21,10 +21,25 @@ import elementsRoutes from './routes/elements.js'
 import companyGroupRoutes from './routes/companyGroups.js'
 import disciplineRoutes from './routes/disciplines.js'
 import uploadRoutes from './routes/uploads.js'
+import notificationRoutes from './routes/notifications.js'
+import backupRoutes from './routes/backup.js'
+import projectAttributeGroupRoutes from './routes/projectAttributeGroups.js'
 
 const app = express()
 
+const IFC_CHUNK_BYTES = 5 * 1024 * 1024 + 1024
+
 app.use(cors())
+
+/** Binary IFC chunks (PUT) — parse before express.json */
+app.use((req, res, next) => {
+  const pathOnly = req.originalUrl.split('?')[0]
+  const isIfcChunkPut = req.method === 'PUT'
+    && /\/api\/v1\/bim-models\/upload-ifc\/chunk-session\/[^/]+\/chunk\/\d+$/.test(pathOnly)
+  if (!isIfcChunkPut) return next()
+  return express.raw({ type: () => true, limit: IFC_CHUNK_BYTES })(req, res, next)
+})
+
 app.use(express.json({ limit: '10mb' }))
 
 app.get('/health', (_req, res) => {
@@ -53,6 +68,9 @@ app.use('/api/v1/elements', elementsRoutes)
 app.use('/api/v1/company-groups', companyGroupRoutes)
 app.use('/api/v1/disciplines', disciplineRoutes)
 app.use('/api/v1/uploads', uploadRoutes)
+app.use('/api/v1/notifications', notificationRoutes)
+app.use('/api/v1/system/backup', backupRoutes)
+app.use('/api/v1/project-attribute-groups', projectAttributeGroupRoutes)
 
 app.use(errorHandler)
 

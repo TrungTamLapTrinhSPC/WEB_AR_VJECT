@@ -16,24 +16,38 @@ class ApiError extends Error {
   }
 }
 
+function authStore() {
+  return localStorage.getItem('auth_remember') === '1' ? localStorage : sessionStorage
+}
+
 export function getTokens() {
+  const store = authStore()
   return {
-    access: localStorage.getItem('access_token'),
-    refresh: localStorage.getItem('refresh_token'),
+    access: store.getItem('access_token') || localStorage.getItem('access_token'),
+    refresh: store.getItem('refresh_token') || localStorage.getItem('refresh_token'),
   }
 }
 
-export function setTokens(access, refresh) {
-  if (access) localStorage.setItem('access_token', access)
-  if (refresh) localStorage.setItem('refresh_token', refresh)
+export function setTokens(access, refresh, { remember } = {}) {
+  if (remember !== undefined) {
+    localStorage.setItem('auth_remember', remember ? '1' : '0')
+  }
+  const primary = remember === false ? sessionStorage : authStore()
+  const secondary = primary === localStorage ? sessionStorage : localStorage
+  secondary.removeItem('access_token')
+  secondary.removeItem('refresh_token')
+  if (access) primary.setItem('access_token', access)
+  if (refresh) primary.setItem('refresh_token', refresh)
 }
 
 export function clearTokens() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
+  sessionStorage.removeItem('access_token')
+  sessionStorage.removeItem('refresh_token')
 }
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   const { refresh } = getTokens()
   if (!refresh) return null
 

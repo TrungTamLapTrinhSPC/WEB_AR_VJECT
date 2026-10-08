@@ -184,6 +184,26 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   ))
 }))
 
+router.patch('/:id/password', requireRole('admin'), asyncHandler(async (req, res) => {
+  const { password } = req.body
+  if (!password) throw new AppError('VALIDATION_ERROR', 'password required')
+  assertStrongPassword(password)
+
+  const existing = await queryOne(
+    'SELECT id FROM users WHERE id = ? AND deleted_at IS NULL',
+    [req.params.id],
+  )
+  if (!existing) throw new AppError('NOT_FOUND', 'User not found', 404)
+
+  const password_hash = await bcrypt.hash(password, 10)
+  await query(
+    'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?',
+    [password_hash, req.params.id],
+  )
+  await invalidateResource('users', req.params.id)
+  res.json({ message: 'Password updated' })
+}))
+
 router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   if (req.params.id === req.user.sub) {
     throw new AppError('VALIDATION_ERROR', 'Không thể xóa tài khoản đang đăng nhập', 400)

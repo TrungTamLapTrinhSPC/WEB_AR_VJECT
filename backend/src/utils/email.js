@@ -19,6 +19,32 @@ function getTransporter() {
   return transporter
 }
 
+export async function sendGenericEmail({ to, subject, text, html }) {
+  const transport = getTransporter()
+  if (!transport) {
+    console.log(`[email-dev] To: ${to}\nSubject: ${subject}\n${text}`)
+    return
+  }
+  try {
+    await transport.sendMail({
+      from: config.smtp.from,
+      to,
+      subject,
+      text,
+      html: html || text,
+    })
+  } catch (err) {
+    console.error('[email] send failed:', err.message)
+  }
+}
+
+export async function sendPasswordResetEmail(to, resetLink, ttlMinutes = 60) {
+  const subject = 'PA3 — Đặt lại mật khẩu'
+  const text = `Mở link sau để đặt lại mật khẩu (hiệu lực ${ttlMinutes} phút):\n${resetLink}`
+  const html = `<p>Đặt lại mật khẩu PA3 Hybrid AR:</p><p><a href="${resetLink}">${resetLink}</a></p><p>Link hết hạn sau ${ttlMinutes} phút.</p>`
+  await sendGenericEmail({ to, subject, text, html })
+}
+
 export async function sendVerificationEmail(to, code) {
   const subject = 'PA3 — Mã kích hoạt tài khoản'
   const text = `Mã kích hoạt tài khoản PA3 Hybrid AR của bạn: ${code}\n\nMã có hiệu lực ${config.emailVerification.codeTtlMinutes} phút.`

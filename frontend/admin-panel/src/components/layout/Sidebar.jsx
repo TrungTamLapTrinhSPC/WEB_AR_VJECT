@@ -20,6 +20,7 @@ const NAV = [
   { section: 'nav_ops', items: [
     { to: '/feedback', icon: 'chat', label: 'nav_feedback' },
     { to: '/groups', icon: 'building', label: 'nav_groups', adminOnly: true },
+    { to: '/attribute-groups', icon: 'building', label: 'nav_attr_groups', adminOnly: true },
     { to: '/users', icon: 'users', label: 'nav_users', adminOnly: true },
   ]},
   { section: 'nav_system', items: [

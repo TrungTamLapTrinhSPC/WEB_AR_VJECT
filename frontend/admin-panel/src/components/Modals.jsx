@@ -7,15 +7,17 @@ import { usePermissions } from '../hooks/usePermissions'
 import {
   createProject, fetchProject, fetchProjects, fetchProjectStats, fetchProjectTeam, deleteProject,
   assignEngineer, removeTeamMember, assignProjectGroup, removeProjectGroup,
+  assignProjectAttributeGroup, removeProjectAttributeGroup,
 } from '../api/projects'
 import { fetchCompanyGroups, fetchCompanyGroup, createCompanyGroup, updateCompanyGroup } from '../api/companyGroups'
+import { fetchProjectAttributeGroups } from '../api/projectAttributeGroups'
 import CompanyGroupAssign from './CompanyGroupAssign'
 import CompanyGroupField from './CompanyGroupField'
 import S3Image from './S3Image'
 import FeedbackImagesField from './FeedbackImagesField'
 import FeedbackProjectModelFields from './FeedbackProjectModelFields'
 import { openS3Url } from '../api/uploads'
-import { fetchUsers, createUser, fetchUser, updateUser, deleteUser } from '../api/users'
+import { fetchUsers, createUser, fetchUser, updateUser, deleteUser, setUserPassword } from '../api/users'
 import {
   uploadIfcBimModel, fetchBimModel, fetchBimVersions, fetchBimFeedbacks, deleteBimModel, fetchBimModels, updateBimModel,
 } from '../api/bim'
@@ -25,16 +27,20 @@ import {
 } from '../api/qr'
 import { fetchGpsPois, createGpsPoi, fetchGpsPoi, updateGpsPoi } from '../api/gps'
 import { fetchQrMarkers } from '../api/qr'
-import { fetchFeedback, fetchFeedbacks, createFeedback, updateFeedback, deleteFeedback } from '../api/feedbacks'
-import { fetchElement } from '../api/misc'
+import {
+  fetchFeedback, fetchFeedbacks, createFeedback, updateFeedback, deleteFeedback,
+  fetchFeedbackComments, postFeedbackComment,
+} from '../api/feedbacks'
+import { fetchElement, updateElementStyle } from '../api/misc'
 import { IMG } from '../data/images'
 import { initials, formatDate, formatDateTime, parseJson } from '../utils/helpers'
 import { getBimPreviewUrls } from '../utils/bimPreview'
 import { disciplineLabel } from '../utils/disciplineLabel'
 import { elementBimLabel } from '../utils/elementBim'
 import DisciplineSelect from './DisciplineSelect'
+import UploadDonut from './UploadDonut'
 import { withBase } from '../utils/basePath'
-import { fetchPasswordPolicy } from '../api/auth'
+import { fetchPasswordPolicy, changePassword } from '../api/auth'
 import PasswordInput from './PasswordInput'
 import PasswordRequirements from './PasswordRequirements'
 import { formatRuleLabel, getRuleChecks, isPasswordStrong } from '../utils/passwordPolicy'
@@ -70,11 +76,37 @@ function statusChip(status) {
   return map[status] || 'chip-gray'
 }
 
-function ProfileModal({ activeModal, closeModal, t }) {
+function ProfileModal({ activeModal, closeModal, t, toast }) {
   const { user, logout } = useAuth()
   const { roleLabelKey } = usePermissions()
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [changingPwd, setChangingPwd] = useState(false)
+
+  useEffect(() => {
+    if (activeModal !== 'profile') {
+      setCurrentPassword('')
+      setNewPassword('')
+    }
+  }, [activeModal])
+
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) return
+    setChangingPwd(true)
+    try {
+      await changePassword(currentPassword, newPassword)
+      setCurrentPassword('')
+      setNewPassword('')
+      toast('success', t('profile_pwd_changed'))
+    } catch (err) {
+      toast('err', err.message)
+    } finally {
+      setChangingPwd(false)
+    }
+  }
 
   const handleLogout = async () => {
+    if (!window.confirm(t('logout_confirm'))) return
     closeModal()
     await logout()
     window.location.href = withBase('login')
@@ -97,6 +129,20 @@ function ProfileModal({ activeModal, closeModal, t }) {
               <li><span>{t('assigned_projects')}</span><b>{user.project_ids.length}</b></li>
             )}
           </ul>
+        </div>
+        <div className="mt-4 text-left p-4 bg-[#F9FAFB] rounded-[10px]">
+          <div className="font-semibold text-sm mb-2">{t('profile_change_pwd')}</div>
+          <div className="form-row">
+            <label className="form-label">{t('profile_current_pwd')}</label>
+            <PasswordInput value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" />
+          </div>
+          <div className="form-row mb-2">
+            <label className="form-label">{t('profile_new_pwd')}</label>
+            <PasswordInput value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+          </div>
+          <button type="button" className="btn btn-p w-full" disabled={changingPwd || !currentPassword || !newPassword} onClick={handleChangePassword}>
+            {changingPwd ? '...' : t('profile_change_pwd_btn')}
+          </button>
         </div>
       </div>
       <div className="modal-ft">
@@ -202,8 +248,22 @@ function qrFormNum(value, fallback) {
   return Number.isFinite(n) ? n : fallback
 }
 
-function qrMarkerPayload(form) {
-  return {
+function qrDaysFromExpires(expiresAt) {
+  if (!expiresAt) return '30'
+  const ms = new Date(expiresAt).getTime() - Date.now()
+  return String(Math.max(1, Math.ceil(ms / 86400000)))
+}
+
+function formatQrExpires(expiresAt, t) {
+  if (!expiresAt) return '—'
+  const d = new Date(expiresAt)
+  if (Number.isNaN(d.getTime())) return '—'
+  const expired = d.getTime() < Date.now()
+  return `${formatDateTime(expiresAt)}${expired ? ` (${t('qr_expired')})` : ''}`
+}
+
+function qrMarkerPayload(form, validDays) {
+  const payload = {
     marker_type: form.markerType,
     floor_level: form.floor || null,
     physical_width_m: qrFormNum(form.sizeCm, 20) / 100,
@@ -216,6 +276,36 @@ function qrMarkerPayload(form) {
     offset_to_center_z: qrFormNum(form.offsetZ, -0.10),
     paper_rotation_y: qrFormNum(form.paperRotY, 0),
   }
+  if (validDays != null && validDays !== '') {
+    payload.valid_days = Number(validDays) || 30
+  }
+  return payload
+}
+
+function QrValidityFields({ validDays, setValidDays, expiresAt, t, readOnly = false }) {
+  return (
+    <div className="form-row">
+      <label className="form-label">{t('qr_valid_days')}</label>
+      {readOnly ? (
+        <div className="text-sm">{formatQrExpires(expiresAt, t)}</div>
+      ) : (
+        <>
+          <input
+            className="form-input"
+            type="number"
+            min={1}
+            max={3650}
+            value={validDays}
+            onChange={(e) => setValidDays(e.target.value)}
+          />
+          <div className="text-xs text-text-muted mt-1">{t('qr_valid_days_hint')}</div>
+          {expiresAt ? (
+            <div className="text-xs text-text-muted mt-1">{t('qr_expires_current')}: {formatQrExpires(expiresAt, t)}</div>
+          ) : null}
+        </>
+      )}
+    </div>
+  )
 }
 
 function QrMarkerConfigFields({ t, form, set }) {
@@ -319,6 +409,7 @@ function QrNewModal({ activeModal, modalData, closeModal, toast, t, refreshData,
   const [projects, setProjects] = useState([])
   const [projectId, setProjectId] = useState('')
   const [markerCode, setMarkerCode] = useState('')
+  const [validDays, setValidDays] = useState('30')
   const { form, set, reset } = useQrFormState()
   const [submitting, setSubmitting] = useState(false)
 
@@ -326,6 +417,7 @@ function QrNewModal({ activeModal, modalData, closeModal, toast, t, refreshData,
     if (activeModal !== 'qr-new') return
     reset()
     setMarkerCode('')
+    setValidDays('30')
     fetchProjects({ limit: 50 })
       .then((r) => {
         const list = r.data || []
@@ -344,6 +436,7 @@ function QrNewModal({ activeModal, modalData, closeModal, toast, t, refreshData,
       const created = await createQrMarker({
         project_id: projectId,
         marker_code: markerCode.trim(),
+        valid_days: Number(validDays) || 30,
         ...qrMarkerPayload(form),
       })
       refreshData()
@@ -377,6 +470,7 @@ function QrNewModal({ activeModal, modalData, closeModal, toast, t, refreshData,
           <label className="form-label">{t('qr_code')} <span className="req">*</span></label>
           <input className="form-input font-mono" value={markerCode} onChange={(e) => setMarkerCode(e.target.value)} placeholder="PROJ001-F03-M003" />
         </div>
+        <QrValidityFields validDays={validDays} setValidDays={setValidDays} t={t} />
         <QrMarkerConfigFields t={t} form={form} set={set} />
       </div>
       <div className="modal-ft">
@@ -552,6 +646,11 @@ function QrViewModal({ activeModal, modalData, closeModal, toast, t, openModal }
               )}
             </div>
             <p className="text-xs text-text-muted mt-4 font-mono break-all">{code}</p>
+            {marker?.expires_at ? (
+              <p className="text-sm text-text-muted mt-3">
+                {t('qr_expires_label')}: {formatQrExpires(marker.expires_at, t)}
+              </p>
+            ) : null}
           </>
         )}
       </div>
@@ -595,6 +694,7 @@ function QrEditModal({ activeModal, modalData, closeModal, toast, t, refreshData
   const [marker, setMarker] = useState(null)
   const [loading, setLoading] = useState(false)
   const { form, set, loadFromMarker } = useQrFormState()
+  const [validDays, setValidDays] = useState('30')
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -604,6 +704,7 @@ function QrEditModal({ activeModal, modalData, closeModal, toast, t, refreshData
       .then((data) => {
         setMarker(data)
         loadFromMarker(data)
+        setValidDays(qrDaysFromExpires(data.expires_at))
       })
       .catch((err) => toast('err', err.message))
       .finally(() => setLoading(false))
@@ -613,7 +714,7 @@ function QrEditModal({ activeModal, modalData, closeModal, toast, t, refreshData
     if (!qrId) return
     setSubmitting(true)
     try {
-      const updated = await updateQrMarker(qrId, qrMarkerPayload(form))
+      const updated = await updateQrMarker(qrId, qrMarkerPayload(form, validDays))
       setMarker(updated)
       refreshData()
       toast('success', t('saved'))
@@ -654,6 +755,12 @@ function QrEditModal({ activeModal, modalData, closeModal, toast, t, refreshData
               <label className="form-label">{t('qr_project')}</label>
               <input className="form-input" value={marker?.project_name || ''} readOnly disabled />
             </div>
+            <QrValidityFields
+              validDays={validDays}
+              setValidDays={setValidDays}
+              expiresAt={marker?.expires_at}
+              t={t}
+            />
             <QrMarkerConfigFields t={t} form={form} set={set} />
           </>
         )}
@@ -1021,6 +1128,7 @@ function UserEditModal({ activeModal, modalData, closeModal, toast, t, refreshDa
   const [companyGroupName, setCompanyGroupName] = useState('')
   const [canAssignEng, setCanAssignEng] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const { isAdmin } = usePermissions()
   const { user: currentUser } = useAuth()
@@ -1029,6 +1137,7 @@ function UserEditModal({ activeModal, modalData, closeModal, toast, t, refreshDa
 
   useEffect(() => {
     if (activeModal !== 'user-edit' || !userId) return
+    setNewPassword('')
     setLoading(true)
     fetchUser(userId)
       .then((u) => {
@@ -1056,6 +1165,9 @@ function UserEditModal({ activeModal, modalData, closeModal, toast, t, refreshDa
       setRole(updated.role || role)
       setCompanyGroupId(updated.company_group_id || '')
       setCompanyGroupName(updated.company_group_name || '')
+      if (isAdmin && newPassword.trim()) {
+        await setUserPassword(userId, newPassword.trim())
+      }
       refreshData()
       closeModal()
       toast('success', t('saved'))
@@ -1132,6 +1244,17 @@ function UserEditModal({ activeModal, modalData, closeModal, toast, t, refreshDa
                 {t('user_can_assign_eng')}
               </label>
             )}
+            {isAdmin && (
+              <div className="form-row mt-2">
+                <label className="form-label">{t('user_new_password')}</label>
+                <PasswordInput
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder={t('user_new_password_ph')}
+                  autoComplete="new-password"
+                />
+              </div>
+            )}
           </>
         )}
       </div>
@@ -1151,19 +1274,47 @@ function UserEditModal({ activeModal, modalData, closeModal, toast, t, refreshDa
   )
 }
 
-function ElementDetailModal({ activeModal, modalData, closeModal, openModal, toast, t }) {
+function ElementDetailModal({ activeModal, modalData, closeModal, openModal, toast, t, refreshData }) {
   const [el, setEl] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [colorHex, setColorHex] = useState('#3B82F6')
+  const [opacityPct, setOpacityPct] = useState(100)
+  const [savingStyle, setSavingStyle] = useState(false)
   const guid = modalData?.id
 
   useEffect(() => {
     if (activeModal !== 'element-detail' || !guid) return
     setLoading(true)
-    fetchElement(guid)
-      .then(setEl)
+    fetchElement(guid, modalData?.model_id ? { model_id: modalData.model_id } : {})
+      .then((data) => {
+        setEl(data)
+        setColorHex(data.color_hex || '#3B82F6')
+        setOpacityPct(data.opacity_pct ?? 100)
+      })
       .catch((err) => toast('err', err.message))
       .finally(() => setLoading(false))
-  }, [activeModal, guid, toast])
+  }, [activeModal, guid, modalData?.model_id, toast])
+
+  const handleSaveStyle = async () => {
+    if (!el?.model_id) {
+      toast('err', t('ele_bim_unlinked'))
+      return
+    }
+    setSavingStyle(true)
+    try {
+      await updateElementStyle(guid, {
+        model_id: el.model_id,
+        color_hex: colorHex,
+        opacity_pct: opacityPct,
+      })
+      refreshData?.()
+      toast('success', t('saved'))
+    } catch (err) {
+      toast('err', err.message)
+    } finally {
+      setSavingStyle(false)
+    }
+  }
 
   return (
     <ModalOverlay id="element-detail" activeModal={activeModal} onClose={closeModal}>
@@ -1209,6 +1360,33 @@ function ElementDetailModal({ activeModal, modalData, closeModal, openModal, toa
               </li>
               <li><span>{t('ele_fb')}</span><b><span className="chip chip-red">{el.fb}</span></b></li>
             </ul>
+            <div className="mt-4 p-3 border border-border rounded-lg bg-[#F9FAFB]">
+              <div className="font-semibold text-sm mb-2">{t('ele_style_title')}</div>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="form-label">{t('ele_color')}</label>
+                  <input type="color" value={colorHex} onChange={(e) => setColorHex(e.target.value)} className="h-10 w-14" />
+                </div>
+                <div className="flex-1 min-w-[140px]">
+                  <label className="form-label">{t('ele_opacity')} ({opacityPct}%)</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={opacityPct}
+                    onChange={(e) => setOpacityPct(Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+                <span
+                  className="w-12 h-12 rounded-lg border border-border shrink-0"
+                  style={{ background: colorHex, opacity: opacityPct / 100 }}
+                />
+              </div>
+              <button type="button" className="btn btn-p btn-sm mt-3" disabled={savingStyle || !el.model_id} onClick={handleSaveStyle}>
+                {savingStyle ? '...' : t('save')}
+              </button>
+            </div>
             {el.feedbacks?.length > 0 && (
               <div className="mt-4">
                 <div className="card-sub mb-2 font-semibold">{t('nav_feedback')}</div>
@@ -1269,11 +1447,13 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
   const [ifcFile, setIfcFile] = useState(null)
   const [previewFiles, setPreviewFiles] = useState([])
   const [submitting, setSubmitting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(null)
 
   useEffect(() => {
     if (activeModal !== 'bim-upload') return
     setIfcFile(null)
     setPreviewFiles([])
+    setUploadProgress(null)
     if (ifcInputRef.current) ifcInputRef.current.value = ''
     if (previewInputRef.current) previewInputRef.current.value = ''
     fetchProjects({ limit: 50 })
@@ -1300,6 +1480,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
   const handleCreate = async () => {
     if (!canSubmit) return
     setSubmitting(true)
+    setUploadProgress({ phase: 'upload', percent: 0, etaSeconds: null })
     try {
       await uploadIfcBimModel({
         project_id: projectId,
@@ -1309,6 +1490,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
         description: desc.trim() || undefined,
         ifcFile,
         previewFiles,
+        onProgress: setUploadProgress,
       })
       refreshData()
       closeModal()
@@ -1318,10 +1500,12 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
       setDesc('')
       setIfcFile(null)
       setPreviewFiles([])
+      setUploadProgress(null)
       if (ifcInputRef.current) ifcInputRef.current.value = ''
       if (previewInputRef.current) previewInputRef.current.value = ''
     } catch (err) {
       toast('err', err.message)
+      setUploadProgress(null)
     } finally {
       setSubmitting(false)
     }
@@ -1337,32 +1521,58 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
         <ModalClose onClose={closeModal} />
       </div>
       <div className="modal-body">
+        {submitting && uploadProgress && (
+          <UploadDonut
+            t={t}
+            percent={uploadProgress.percent ?? 0}
+            phase={uploadProgress.phase}
+            etaSeconds={uploadProgress.etaSeconds}
+            label={
+              uploadProgress.phase === 'processing'
+                ? t('bu_upload_phase_process')
+                : t('bu_upload_phase_upload')
+            }
+            sublabel={
+              ifcFile
+                ? (() => {
+                    const totalMb = (ifcFile.size / (1024 * 1024)).toFixed(1)
+                    if (uploadProgress.phase === 'upload' && uploadProgress.loaded != null) {
+                      const doneMb = (uploadProgress.loaded / (1024 * 1024)).toFixed(1)
+                      return `${ifcFile.name} · ${doneMb} / ${totalMb} MB`
+                    }
+                    return `${ifcFile.name} · ${totalMb} MB`
+                  })()
+                : undefined
+            }
+          />
+        )}
+        <div className={submitting ? 'opacity-60 pointer-events-none select-none' : undefined}>
         <div className="form-row-grid">
           <div>
             <label className="form-label">{t('bu_proj')} <span className="req">*</span></label>
-            <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={!projects.length}>
+            <select className="form-select" value={projectId} onChange={(e) => setProjectId(e.target.value)} disabled={!projects.length || submitting}>
               {!projects.length && <option value="">{t('empty_projects')}</option>}
               {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
           <div>
             <label className="form-label">{t('bu_type')} <span className="req">*</span></label>
-            <DisciplineSelect value={discipline} onChange={setDiscipline} required />
+            <DisciplineSelect value={discipline} onChange={setDiscipline} required disabled={submitting} />
           </div>
         </div>
         <div className="form-row-grid">
           <div>
             <label className="form-label">{t('bu_name')}</label>
-            <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tòa A – F4" />
+            <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tòa A – F4" disabled={submitting} />
           </div>
           <div>
             <label className="form-label">{t('bu_ver')} <span className="req">*</span></label>
-            <input className="form-input" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="v1.0" />
+            <input className="form-input" value={version} onChange={(e) => setVersion(e.target.value)} placeholder="v1.0" disabled={submitting} />
           </div>
         </div>
         <div className="form-row">
           <label className="form-label">{t('bu_desc')}</label>
-          <textarea className="form-textarea" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t('bu_desc_ph')} />
+          <textarea className="form-textarea" value={desc} onChange={(e) => setDesc(e.target.value)} placeholder={t('bu_desc_ph')} disabled={submitting} />
         </div>
         <div className="form-row">
           <label className="form-label">{t('bu_ifc')} <span className="req">*</span></label>
@@ -1371,6 +1581,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
             type="file"
             accept=".ifc,.IFC,application/octet-stream"
             className="form-input py-2 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/10 file:text-primary-dark"
+            disabled={submitting}
             onChange={(e) => {
               const file = e.target.files?.[0] || null
               setIfcFile(file)
@@ -1387,12 +1598,14 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
             accept="image/png,image/jpeg,image/webp"
             multiple
             className="form-input py-2"
+            disabled={submitting}
             onChange={(e) => setPreviewFiles(Array.from(e.target.files || []).slice(0, 8))}
           />
           {previewFiles.length > 0 && (
             <div className="text-xs text-text-muted mt-1">{previewFiles.map((f) => f.name).join(', ')}</div>
           )}
           <div className="text-xs text-text-muted mt-1">{t('bu_prev_hint')}</div>
+        </div>
         </div>
       </div>
       <div className="modal-ft flex-col items-stretch sm:flex-row sm:items-center gap-2">
@@ -1402,9 +1615,9 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
           </p>
         )}
         <div className="flex gap-2 justify-end flex-1">
-          <button type="button" className="btn" onClick={closeModal}>{t('cancel')}</button>
+          <button type="button" className="btn" onClick={closeModal} disabled={submitting}>{t('cancel')}</button>
           <button type="button" className="btn btn-p" disabled={submitting || !canSubmit} onClick={handleCreate}>
-            <Icon name="upload" size={14} /> {submitting ? t('bu_uploading') : 'Upload'}
+            <Icon name="upload" size={14} /> {submitting ? (uploadProgress?.phase === 'processing' ? t('bu_upload_phase_process') : t('bu_upload_phase_upload')) : 'Upload'}
           </button>
         </div>
       </div>
@@ -2023,7 +2236,9 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
   const [stats, setStats] = useState(null)
   const [team, setTeam] = useState([])
   const [projectGroups, setProjectGroups] = useState([])
+  const [projectAttributeGroups, setProjectAttributeGroups] = useState([])
   const [allGroups, setAllGroups] = useState([])
+  const [allAttributeGroups, setAllAttributeGroups] = useState([])
   const [loading, setLoading] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [candidates, setCandidates] = useState([])
@@ -2052,6 +2267,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
     const teamRes = await fetchProjectTeam(projectId)
     setTeam(teamRes.data || [])
     setProjectGroups(teamRes.groups || [])
+    setProjectAttributeGroups(teamRes.attribute_groups || [])
   }
 
   useEffect(() => {
@@ -2072,6 +2288,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
         setStats(s)
         setTeam(teamRes.data || [])
         setProjectGroups(teamRes.groups || [])
+        setProjectAttributeGroups(teamRes.attribute_groups || [])
       })
       .catch((err) => toast('err', err.message))
       .finally(() => setLoading(false))
@@ -2082,6 +2299,9 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
     fetchCompanyGroups()
       .then((r) => setAllGroups(r.data || []))
       .catch(() => setAllGroups([]))
+    fetchProjectAttributeGroups()
+      .then((r) => setAllAttributeGroups(r.data || []))
+      .catch(() => setAllAttributeGroups([]))
   }, [activeModal, tab, dataVersion])
 
   useEffect(() => {
@@ -2191,6 +2411,31 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
     } catch (err) {
       toast('err', err.message)
       throw err
+    }
+  }
+
+  const handleAddAttributeGroup = async (groupId) => {
+    if (!projectId || !groupId) return
+    try {
+      await assignProjectAttributeGroup(projectId, groupId)
+      await reloadTeam()
+      refreshProjects()
+      toast('success', t('pag_assigned'))
+    } catch (err) {
+      toast('err', err.message)
+      throw err
+    }
+  }
+
+  const handleRemoveAttributeGroup = async (groupId) => {
+    if (!projectId) return
+    try {
+      await removeProjectAttributeGroup(projectId, groupId)
+      await reloadTeam()
+      refreshProjects()
+      toast('success', t('deleted'))
+    } catch (err) {
+      toast('err', err.message)
     }
   }
 
@@ -2436,19 +2681,33 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
               )
             )}
             {tab === 'team' && (
-              <CompanyGroupAssign
-                assigned={projectGroups}
-                allGroups={allGroups}
-                onAssign={handleAddGroup}
-                onRemove={handleRemoveGroup}
-                canEdit={canManageProjectTeam}
-                canCreate={isAdmin}
-                onCreateClick={() => openModal('group-new')}
-                t={t}
-              />
+              <>
+                <div className="text-xs font-bold text-text-muted uppercase mb-2">{t('pag_title')}</div>
+                <CompanyGroupAssign
+                  assigned={projectAttributeGroups}
+                  allGroups={allAttributeGroups}
+                  onAssign={handleAddAttributeGroup}
+                  onRemove={handleRemoveAttributeGroup}
+                  canEdit={canManageProjectTeam}
+                  canCreate={isAdmin}
+                  onCreateClick={() => { closeModal(); window.location.assign(withBase('attribute-groups')) }}
+                  t={t}
+                />
+                <div className="text-xs font-bold text-text-muted uppercase mb-2 mt-4">{t('prj_groups_title')}</div>
+                <CompanyGroupAssign
+                  assigned={projectGroups}
+                  allGroups={allGroups}
+                  onAssign={handleAddGroup}
+                  onRemove={handleRemoveGroup}
+                  canEdit={canManageProjectTeam}
+                  canCreate={isAdmin}
+                  onCreateClick={() => openModal('group-new')}
+                  t={t}
+                />
+              </>
             )}
             {tab === 'team' && (
-              <div className="text-xs font-bold text-text-muted uppercase mb-2 mt-1">{t('prj_members_title')}</div>
+              <div className="text-xs font-bold text-text-muted uppercase mb-2 mt-4">{t('prj_members_title')}</div>
             )}
             {tab === 'team' && addOpen && canManageProjectTeam && (
               <div className="flex flex-col sm:flex-row gap-2 sm:items-end mb-4 p-3 bg-[#F9FAFB] rounded-lg border border-border-light">
@@ -2595,6 +2854,9 @@ function FeedbackModal({ activeModal, modalData, closeModal, toast, t, refreshDa
   const [imageUrls, setImageUrls] = useState([])
   const [photoIdx, setPhotoIdx] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [comments, setComments] = useState([])
+  const [commentText, setCommentText] = useState('')
+  const [commentSending, setCommentSending] = useState(false)
   const fbId = modalData?.id
 
   const loadForm = (data) => {
@@ -2616,14 +2878,39 @@ function FeedbackModal({ activeModal, modalData, closeModal, toast, t, refreshDa
     setPhotoIdx(0)
   }
 
+  const loadComments = useCallback(() => {
+    if (!fbId) return
+    fetchFeedbackComments(fbId)
+      .then((r) => setComments(r.data || []))
+      .catch(() => setComments([]))
+  }, [fbId])
+
   useEffect(() => {
     if (activeModal !== 'feedback' || !fbId) return
     setLoading(true)
+    setCommentText('')
     fetchFeedback(fbId)
       .then(loadForm)
       .catch((err) => toast('err', err.message))
       .finally(() => setLoading(false))
-  }, [activeModal, fbId, toast])
+    loadComments()
+  }, [activeModal, fbId, toast, loadComments])
+
+  const handleSendComment = async () => {
+    const body = commentText.trim()
+    if (!body || !fbId) return
+    setCommentSending(true)
+    try {
+      const row = await postFeedbackComment(fbId, body)
+      setComments((prev) => [...prev, row])
+      setCommentText('')
+      toast('success', t('fb_comment_sent'))
+    } catch (err) {
+      toast('err', err.message)
+    } finally {
+      setCommentSending(false)
+    }
+  }
 
   const buildPayload = (overrides = {}) => ({
     title: title.trim() || null,
@@ -2817,6 +3104,36 @@ function FeedbackModal({ activeModal, modalData, closeModal, toast, t, refreshDa
                   <input className="form-input font-mono text-sm" value={elementGuid} onChange={(e) => setElementGuid(e.target.value)} />
                 </div>
               )}
+              <div className="form-row">
+                <label className="form-label">{t('fb_comments')}</label>
+                <div className="fb-comment-thread">
+                  {comments.length === 0 ? (
+                    <div className="text-xs text-text-muted">{t('fb_comments_empty')}</div>
+                  ) : comments.map((c) => (
+                    <div key={c.id} className="fb-comment-item">
+                      <div className="font-semibold text-xs">
+                        {c.user_name}
+                        <span className="text-text-muted font-normal"> · {formatDateTime(c.created_at)}</span>
+                      </div>
+                      <div className="mt-1 whitespace-pre-wrap">{c.body}</div>
+                    </div>
+                  ))}
+                </div>
+                <textarea
+                  className="form-textarea min-h-[72px]"
+                  value={commentText}
+                  placeholder={t('fb_comment_ph')}
+                  onChange={(e) => setCommentText(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm btn-p mt-2"
+                  disabled={commentSending || !commentText.trim()}
+                  onClick={handleSendComment}
+                >
+                  {commentSending ? '...' : t('fb_comment_send')}
+                </button>
+              </div>
               <div className="flex justify-end mb-2">
                 <button type="button" className="btn btn-sm btn-s" disabled={saving} onClick={handleResolve}>
                   <Icon name="check" size={12} /> {t('st_resolved')}
@@ -3169,7 +3486,7 @@ export default function Modals() {
 
   return (
     <>
-      <ProfileModal activeModal={activeModal} closeModal={closeModal} t={t} />
+      <ProfileModal activeModal={activeModal} closeModal={closeModal} t={t} toast={toast} />
       <GroupNewModal activeModal={activeModal} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
       <GroupEditModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
       <GroupDetailModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} refreshProjects={refreshProjects} openModal={openModal} />
@@ -3182,7 +3499,7 @@ export default function Modals() {
       <GpsEditModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
       <UserNewModal activeModal={activeModal} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} openModal={openModal} />
       <UserEditModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} openModal={openModal} dataVersion={dataVersion} />
-      <ElementDetailModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} openModal={openModal} toast={toast} t={t} />
+      <ElementDetailModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} openModal={openModal} toast={toast} t={t} refreshData={refreshData} />
       <BimUploadModal activeModal={activeModal} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />
       <ProjectModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshProjects={refreshProjects} openModal={openModal} dataVersion={dataVersion} />
       <FeedbackModal activeModal={activeModal} modalData={modalData} closeModal={closeModal} toast={toast} t={t} refreshData={refreshData} />

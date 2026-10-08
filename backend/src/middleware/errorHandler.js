@@ -14,6 +14,16 @@ export function errorHandler(err, _req, res, _next) {
     })
   }
 
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({
+      error: {
+        code: 'VALIDATION_ERROR',
+        message: 'Chunk too large — increase nginx client_max_body_size (≥6m)',
+        details: [],
+      },
+    })
+  }
+
   console.error(err)
   return res.status(500).json({
     error: { code: 'INTERNAL_ERROR', message: 'Internal server error', details: [] },

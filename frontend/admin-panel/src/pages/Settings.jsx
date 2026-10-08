@@ -3,6 +3,8 @@ import { useI18n } from '../context/I18nContext'
 import { useApp } from '../context/AppContext'
 import Icon from '../components/Icon'
 import { fetchSettings, updateSettings } from '../api/misc'
+import { fetchBackupInfo } from '../api/backup'
+import { formatDateTime } from '../utils/helpers'
 
 const TABS = [
   { id: 'general', label: 'set_tab_gen' },
@@ -10,6 +12,7 @@ const TABS = [
   { id: 'notif', label: 'set_tab_notif' },
   { id: 'integ', label: 'set_tab_int' },
   { id: 'sec', label: 'set_tab_sec' },
+  { id: 'backup', label: 'set_tab_backup' },
 ]
 
 function Toggle({ on, onToggle }) {
@@ -32,6 +35,8 @@ export default function Settings() {
   const [settings, setSettings] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [backupInfo, setBackupInfo] = useState(null)
+  const [backupLoading, setBackupLoading] = useState(false)
 
   useEffect(() => {
     fetchSettings()
@@ -39,6 +44,15 @@ export default function Settings() {
       .catch(() => toast('err', t('settings_load_err')))
       .finally(() => setLoading(false))
   }, [toast, t])
+
+  useEffect(() => {
+    if (activeTab !== 'backup') return
+    setBackupLoading(true)
+    fetchBackupInfo()
+      .then(setBackupInfo)
+      .catch((err) => toast('err', err.message))
+      .finally(() => setBackupLoading(false))
+  }, [activeTab, toast])
 
   const patch = (section, key, value) => {
     setSettings((s) => ({
@@ -270,11 +284,43 @@ export default function Settings() {
         </>
       )}
 
-      <div className="flex justify-end gap-2 mt-4">
-        <button type="button" className="btn btn-p" disabled={saving} onClick={handleSave}>
-          {saving ? '...' : t('save_changes')}
-        </button>
-      </div>
+      {activeTab === 'backup' && (
+        <div className="card">
+          <div className="card-title mb-2">{t('backup_title')}</div>
+          <p className="text-sm text-text-muted mb-4">{t('backup_sub')}</p>
+          {backupLoading ? (
+            <div className="text-text-muted text-sm">{t('loading')}</div>
+          ) : (
+            <>
+              <div className="text-sm mb-2"><b>{t('backup_dir')}:</b> <code className="text-xs">{backupInfo?.backup_dir || '—'}</code></div>
+              {backupInfo?.cron_hint ? (
+                <pre className="text-xs bg-[#F9FAFB] p-3 rounded-lg overflow-auto border border-border mb-4">{backupInfo.cron_hint}</pre>
+              ) : null}
+              <div className="font-semibold text-sm mb-2">{t('backup_files')}</div>
+              {(backupInfo?.files || []).length === 0 ? (
+                <div className="text-sm text-text-muted">{t('backup_empty')}</div>
+              ) : (
+                <ul className="info-list">
+                  {backupInfo.files.map((f) => (
+                    <li key={f.name}>
+                      <span>{f.name}</span>
+                      <b>{Math.round((f.size || 0) / 1024)} KB · {formatDateTime(f.mtime)}</b>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab !== 'backup' && (
+        <div className="flex justify-end gap-2 mt-4">
+          <button type="button" className="btn btn-p" disabled={saving} onClick={handleSave}>
+            {saving ? '...' : t('save_changes')}
+          </button>
+        </div>
+      )}
     </>
   )
 }

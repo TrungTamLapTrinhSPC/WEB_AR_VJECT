@@ -12,6 +12,7 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [rememberMe, setRememberMe] = useState(true)
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async (e) => {
@@ -19,7 +20,7 @@ export default function Login() {
     setError('')
     setSubmitting(true)
     try {
-      await login(email, password)
+      await login(email, password, rememberMe)
       navigate('/', { replace: true })
     } catch (err) {
       if (err instanceof ApiError && err.code === 'EMAIL_NOT_VERIFIED') {
@@ -64,6 +65,15 @@ export default function Login() {
             required
             autoComplete="current-password"
           />
+        </div>
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+            {t('login_remember')}
+          </label>
+          <Link to="/forgot-password" className="text-primary-dark no-underline hover:underline">
+            {t('login_forgot')}
+          </Link>
         </div>
         <button type="submit" className="btn btn-p w-full justify-center" disabled={submitting}>
           {submitting ? t('login_submitting') : t('login_btn')}

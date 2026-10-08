@@ -31,8 +31,15 @@ function numOr(value, fallback) {
 const PATCH_FIELDS = [
   'floor_level', 'physical_width_m', 'bim_pos_x', 'bim_pos_y', 'bim_pos_z', 'qr_image_url',
   'marker_type', 'paper_size', 'tabletop_scale', 'offset_to_center_x', 'offset_to_center_z',
-  'paper_rotation_y',
+  'paper_rotation_y', 'expires_at',
 ]
+
+function resolveQrExpiresAt(body) {
+  if (body.expires_at) return body.expires_at
+  const days = Number(body.valid_days ?? 30)
+  const d = Number.isFinite(days) && days > 0 ? days : 30
+  return new Date(Date.now() + d * 86400 * 1000)
+}
 
 router.get('/', asyncHandler(async (req, res) => {
   const limit = clampLimit(req.query.limit)
@@ -135,14 +142,15 @@ router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (re
   }
 
   const id = uuidv4()
+  const expiresAt = resolveQrExpiresAt(req.body)
   await query(
     `INSERT INTO qr_markers (
       id, marker_code, project_id, floor_level, physical_width_m,
       bim_pos_x, bim_pos_y, bim_pos_z,
       marker_type, paper_size, tabletop_scale,
       offset_to_center_x, offset_to_center_z, paper_rotation_y,
-      created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      expires_at, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
     [
       id, marker_code, project_id, floor_level || null, numOr(physical_width_m, 0.15),
       numOr(bim_pos_x, 0), numOr(bim_pos_y, 0), numOr(bim_pos_z, 0),
@@ -150,6 +158,7 @@ router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (re
       numOr(tabletop_scale, 0.01),
       numOr(offset_to_center_x, 0.15), numOr(offset_to_center_z, -0.10),
       numOr(paper_rotation_y, 0),
+      expiresAt,
     ],
   )
 
@@ -170,6 +179,13 @@ router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (re
 router.patch('/:id', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
   const sets = []
   const params = []
+  if (req.body.valid_days !== undefined && req.body.expires_at === undefined) {
+    const days = Number(req.body.valid_days)
+    if (Number.isFinite(days) && days > 0) {
+      sets.push('expires_at = DATE_ADD(NOW(), INTERVAL ? DAY)')
+      params.push(Math.min(Math.floor(days), 3650))
+    }
+  }
   for (const f of PATCH_FIELDS) {
     if (req.body[f] === undefined) continue
     if (f === 'marker_type') {

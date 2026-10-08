@@ -8,6 +8,7 @@ import {
   buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
 } from '../utils/cursor.js'
 import { cacheGet, cacheSet, hashFilters, invalidateResource, cacheDel } from '../utils/cache.js'
+import { notifyFeedbackComment } from '../utils/notify.js'
 
 const router = Router()
 
@@ -110,6 +111,68 @@ router.get('/:id', asyncHandler(async (req, res) => {
 
   await cacheSet(cacheKey, fb, config.cache.detail)
   res.json(fb)
+}))
+
+router.get('/:id/comments', asyncHandler(async (req, res) => {
+  const fb = await queryOne(
+    'SELECT id FROM feedbacks WHERE id = ? AND deleted_at IS NULL',
+    [req.params.id],
+  )
+  if (!fb) throw new AppError('NOT_FOUND', 'Feedback not found', 404)
+
+  const rows = await query(
+    `SELECT c.id, c.body, c.created_at, c.user_id,
+            u.full_name AS user_name, u.role AS user_role, u.email AS user_email
+     FROM feedback_comments c
+     JOIN users u ON u.id = c.user_id
+     WHERE c.feedback_id = ?
+     ORDER BY c.created_at ASC`,
+    [req.params.id],
+  )
+  res.json({ data: rows })
+}))
+
+router.post('/:id/comments', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {
+  const body = req.body?.body?.trim()
+  if (!body) throw new AppError('VALIDATION_ERROR', 'body required')
+
+  const fb = await queryOne(
+    'SELECT id, title FROM feedbacks WHERE id = ? AND deleted_at IS NULL',
+    [req.params.id],
+  )
+  if (!fb) throw new AppError('NOT_FOUND', 'Feedback not found', 404)
+
+  const id = uuidv4()
+  await query(
+    `INSERT INTO feedback_comments (id, feedback_id, user_id, body, created_at)
+     VALUES (?, ?, ?, ?, NOW())`,
+    [id, req.params.id, req.user.sub, body],
+  )
+
+  const author = await queryOne(
+    'SELECT full_name, role FROM users WHERE id = ?',
+    [req.user.sub],
+  )
+
+  notifyFeedbackComment({
+    feedbackId: req.params.id,
+    feedbackTitle: fb.title,
+    commentBody: body,
+    authorName: author?.full_name || 'User',
+    authorRole: author?.role || req.user.role,
+    authorUserId: req.user.sub,
+  }).catch((err) => console.error('[notify] feedback comment:', err.message))
+
+  await invalidateResource('feedbacks', req.params.id)
+  const row = await queryOne(
+    `SELECT c.id, c.body, c.created_at, c.user_id,
+            u.full_name AS user_name, u.role AS user_role
+     FROM feedback_comments c
+     JOIN users u ON u.id = c.user_id
+     WHERE c.id = ?`,
+    [id],
+  )
+  res.status(201).json(row)
 }))
 
 router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {

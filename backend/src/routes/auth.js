@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import { query, queryOne } from '../db/pool.js'
 import { config } from '../config/index.js'
@@ -8,18 +9,23 @@ import { asyncHandler, AppError } from '../middleware/errorHandler.js'
 import { authenticate } from '../middleware/auth.js'
 import { cacheGet, cacheSet, invalidateResource } from '../utils/cache.js'
 import { getUserProjectIds } from '../utils/userProjects.js'
-import { assertAllowedRegistrationEmail, isValidEmail, sendVerificationEmail } from '../utils/email.js'
+import {
+  assertAllowedRegistrationEmail, isValidEmail, sendVerificationEmail, sendPasswordResetEmail,
+} from '../utils/email.js'
 import { assertStrongPassword, getPasswordPolicy } from '../utils/passwordPolicy.js'
 
 const router = Router()
 
-function signTokens(user) {
+function signTokens(user, { remember = false } = {}) {
   const payload = { sub: user.id, email: user.email, role: user.role }
-  const access_token = jwt.sign(payload, config.jwt.secret, { expiresIn: config.jwt.expiresIn })
+  const accessExp = remember ? '7d' : config.jwt.expiresIn
+  const refreshExp = remember ? '90d' : config.jwt.refreshExpiresIn
+  const access_token = jwt.sign(payload, config.jwt.secret, { expiresIn: accessExp })
   const refresh_token = jwt.sign({ sub: user.id, type: 'refresh' }, config.jwt.secret, {
-    expiresIn: config.jwt.refreshExpiresIn,
+    expiresIn: refreshExp,
   })
-  return { access_token, refresh_token, expires_in: 86400 }
+  const expiresSec = remember ? 7 * 86400 : 86400
+  return { access_token, refresh_token, expires_in: expiresSec }
 }
 
 function generateCode() {
@@ -131,8 +137,77 @@ router.post('/resend-verification', asyncHandler(async (req, res) => {
   res.json({ message: 'Verification code resent' })
 }))
 
+router.post('/forgot-password', asyncHandler(async (req, res) => {
+  const { email } = req.body
+  if (!email || !isValidEmail(email)) {
+    throw new AppError('VALIDATION_ERROR', 'Valid email required')
+  }
+  const normalized = email.trim().toLowerCase()
+  const user = await queryOne(
+    'SELECT id, email FROM users WHERE email = ? AND deleted_at IS NULL',
+    [normalized],
+  )
+  if (user) {
+    const rawToken = crypto.randomBytes(32).toString('hex')
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const id = uuidv4()
+    await query('DELETE FROM user_password_resets WHERE user_id = ?', [user.id])
+    await query(
+      `INSERT INTO user_password_resets (id, user_id, token_hash, expires_at, created_at)
+       VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 60 MINUTE), NOW())`,
+      [id, user.id, tokenHash],
+    )
+    const base = process.env.FRONTEND_URL || process.env.ADMIN_PANEL_URL || 'http://localhost:5173'
+    const resetLink = `${base.replace(/\/$/, '')}/reset-password?token=${rawToken}`
+    await sendPasswordResetEmail(user.email, resetLink, 60)
+  }
+  res.json({ message: 'If the email exists, a reset link was sent' })
+}))
+
+router.post('/reset-password', asyncHandler(async (req, res) => {
+  const { token, password } = req.body
+  if (!token || !password) {
+    throw new AppError('VALIDATION_ERROR', 'token and password required')
+  }
+  assertStrongPassword(password)
+  const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex')
+  const row = await queryOne(
+    `SELECT id, user_id FROM user_password_resets
+     WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()
+     ORDER BY created_at DESC LIMIT 1`,
+    [tokenHash],
+  )
+  if (!row) throw new AppError('VALIDATION_ERROR', 'Invalid or expired reset link', 400)
+
+  const password_hash = await bcrypt.hash(password, 10)
+  await query('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [password_hash, row.user_id])
+  await query('UPDATE user_password_resets SET used_at = NOW() WHERE id = ?', [row.id])
+  await query('UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = ? AND revoked_at IS NULL', [row.user_id])
+  res.json({ message: 'Password reset successful' })
+}))
+
+router.post('/change-password', authenticate, asyncHandler(async (req, res) => {
+  const { current_password, password } = req.body
+  if (!current_password || !password) {
+    throw new AppError('VALIDATION_ERROR', 'current_password and password required')
+  }
+  assertStrongPassword(password)
+  const user = await queryOne(
+    'SELECT id, password_hash FROM users WHERE id = ? AND deleted_at IS NULL',
+    [req.user.sub],
+  )
+  if (!user) throw new AppError('NOT_FOUND', 'User not found', 404)
+  if (!(await bcrypt.compare(String(current_password), user.password_hash))) {
+    throw new AppError('VALIDATION_ERROR', 'Current password is incorrect', 400)
+  }
+  const password_hash = await bcrypt.hash(password, 10)
+  await query('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [password_hash, user.id])
+  await query('UPDATE user_sessions SET revoked_at = NOW() WHERE user_id = ? AND revoked_at IS NULL', [user.id])
+  res.json({ message: 'Password changed' })
+}))
+
 router.post('/login', asyncHandler(async (req, res) => {
-  const { email, password } = req.body
+  const { email, password, remember_me: rememberMe } = req.body
   if (!email || !password) {
     throw new AppError('VALIDATION_ERROR', 'Email and password required')
   }
@@ -149,10 +224,12 @@ router.post('/login', asyncHandler(async (req, res) => {
     throw new AppError('EMAIL_NOT_VERIFIED', 'Please verify your email before login', 403)
   }
 
-  const tokens = signTokens(user)
+  const remember = rememberMe === true || rememberMe === 'true' || rememberMe === 1
+  const tokens = signTokens(user, { remember })
   const sessionId = uuidv4()
-  const expiresAt = new Date(Date.now() + 86400 * 1000)
-  const refreshExpiresAt = new Date(Date.now() + 30 * 86400 * 1000)
+  const expiresAt = new Date(Date.now() + tokens.expires_in * 1000)
+  const refreshDays = remember ? 90 : 30
+  const refreshExpiresAt = new Date(Date.now() + refreshDays * 86400 * 1000)
 
   await query(
     `INSERT INTO user_sessions (id, user_id, token, refresh_token, expires_at, refresh_expires_at, ip_address, user_agent)

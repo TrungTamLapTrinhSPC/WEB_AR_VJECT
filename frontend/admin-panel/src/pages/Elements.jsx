@@ -53,6 +53,17 @@ export default function Elements() {
       ),
     },
     {
+      id: 'color',
+      label: t('ele_color'),
+      render: (e) => (
+        <span
+          className="inline-block w-8 h-8 rounded-md border border-border"
+          style={{ background: e.color_hex || '#3B82F6', opacity: (e.opacity_pct ?? 100) / 100 }}
+          title={`${e.color_hex || '#3B82F6'} · ${e.opacity_pct ?? 100}%`}
+        />
+      ),
+    },
+    {
       id: 'cat',
       label: t('ele_cat'),
       render: (e) => (

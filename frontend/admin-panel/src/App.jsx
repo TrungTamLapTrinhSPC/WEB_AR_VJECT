@@ -10,6 +10,8 @@ import ToastContainer from './components/ToastContainer'
 import Modals from './components/Modals'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Bim from './pages/Bim'
@@ -19,6 +21,7 @@ import Elements from './pages/Elements'
 import Feedback from './pages/Feedback'
 import Users from './pages/Users'
 import CompanyGroups from './pages/CompanyGroups'
+import ProjectAttributeGroups from './pages/ProjectAttributeGroups'
 import Settings from './pages/Settings'
 import Audit from './pages/Audit'
 import { getBasename } from './utils/basePath'
@@ -33,6 +36,8 @@ function AppShell() {
           <Route element={<AuthLayout />}>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
           </Route>
         </Route>
 
@@ -47,6 +52,7 @@ function AppShell() {
             <Route path="feedback" element={<Feedback />} />
             <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
             <Route path="groups" element={<AdminRoute><CompanyGroups /></AdminRoute>} />
+            <Route path="attribute-groups" element={<AdminRoute><ProjectAttributeGroups /></AdminRoute>} />
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="audit" element={<AdminRoute><Audit /></AdminRoute>} />
           </Route>
