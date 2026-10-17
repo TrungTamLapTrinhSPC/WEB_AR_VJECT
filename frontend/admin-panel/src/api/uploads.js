@@ -1,4 +1,4 @@
-import { apiFetch } from './client.js'
+import { apiFetch, safeFetch, ApiError } from './client.js'
 
 export function fetchUploadConfig() {
   return apiFetch('/uploads/config')
@@ -18,12 +18,12 @@ export async function uploadToS3(file, { prefix = 'uploads' } = {}) {
     content_type: file.type || 'application/octet-stream',
     prefix,
   })
-  const res = await fetch(presign.uploadUrl, {
+  const res = await safeFetch(presign.uploadUrl, {
     method: 'PUT',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
   })
-  if (!res.ok) throw new Error('S3 upload failed')
+  if (!res.ok) throw new ApiError('UPLOAD_FAILED', 'S3 upload failed', res.status)
   return presign
 }
 

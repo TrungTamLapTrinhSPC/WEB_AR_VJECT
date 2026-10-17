@@ -5,7 +5,8 @@ import { useApp } from '../context/AppContext'
 import { useAuth } from '../context/AuthContext'
 import { usePermissions } from '../hooks/usePermissions'
 import {
-  createProject, fetchProject, fetchProjects, fetchProjectStats, fetchProjectTeam, deleteProject,
+  createProject, fetchProject, fetchProjects, fetchProjectStats, fetchProjectTeam, deleteProject, updateProject,
+  uploadProjectCover,
   assignEngineer, removeTeamMember, assignProjectGroup, removeProjectGroup,
   assignProjectAttributeGroup, removeProjectAttributeGroup,
 } from '../api/projects'
@@ -20,6 +21,7 @@ import { openS3Url } from '../api/uploads'
 import { fetchUsers, createUser, fetchUser, updateUser, deleteUser, setUserPassword } from '../api/users'
 import {
   uploadIfcBimModel, fetchBimModel, fetchBimVersions, fetchBimFeedbacks, deleteBimModel, fetchBimModels, updateBimModel,
+  uploadBimPreviewImages,
 } from '../api/bim'
 import {
   createQrMarker, fetchQrMarker, updateQrMarker, fetchQrMarkerImageBlob, generateQrMarkerImage,
@@ -74,6 +76,12 @@ function statusChip(status) {
     rejected: 'chip-red',
   }
   return map[status] || 'chip-gray'
+}
+
+function projectStatusLabelKey(status) {
+  if (status === 'completed') return 'prj_st_completed'
+  if (status === 'archived') return 'prj_st_archive'
+  return 'prj_st_active'
 }
 
 function ProfileModal({ activeModal, closeModal, t, toast }) {
@@ -185,6 +193,7 @@ function ProjectNewModal({ activeModal, closeModal, toast, t, refreshProjects })
       toast('success', t('created'))
       setName('')
       setAddress('')
+      setStatus('active')
       setEngineerId('')
     } catch (err) {
       toast('err', err.message || t('err_generic'))
@@ -216,8 +225,7 @@ function ProjectNewModal({ activeModal, closeModal, toast, t, refreshProjects })
             <label className="form-label">{t('pn_st')}</label>
             <select className="form-select" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="active">{t('prj_st_active')}</option>
-              <option value="completed">{t('prj_st_archive')}</option>
-              <option value="archived">{t('prj_st_archive')}</option>
+              <option value="completed">{t('prj_st_completed')}</option>
             </select>
           </div>
           <div>
@@ -241,8 +249,6 @@ function ProjectNewModal({ activeModal, closeModal, toast, t, refreshProjects })
   )
 }
 
-const QR_PAPER_SIZES = ['A4', 'A3', 'A2', 'A1', 'A0']
-
 function qrFormNum(value, fallback) {
   const n = Number(value)
   return Number.isFinite(n) ? n : fallback
@@ -264,17 +270,12 @@ function formatQrExpires(expiresAt, t) {
 
 function qrMarkerPayload(form, validDays) {
   const payload = {
-    marker_type: form.markerType,
     floor_level: form.floor || null,
     physical_width_m: qrFormNum(form.sizeCm, 20) / 100,
     bim_pos_x: qrFormNum(form.x, 0),
     bim_pos_y: qrFormNum(form.y, 0),
     bim_pos_z: qrFormNum(form.z, 0),
-    paper_size: form.paperSize,
-    tabletop_scale: qrFormNum(form.tabletopScale, 0.01),
-    offset_to_center_x: qrFormNum(form.offsetX, 0.15),
-    offset_to_center_z: qrFormNum(form.offsetZ, -0.10),
-    paper_rotation_y: qrFormNum(form.paperRotY, 0),
+    rotation_angle: qrFormNum(form.rotation, 0),
   }
   if (validDays != null && validDays !== '') {
     payload.valid_days = Number(validDays) || 30
@@ -309,21 +310,12 @@ function QrValidityFields({ validDays, setValidDays, expiresAt, t, readOnly = fa
 }
 
 function QrMarkerConfigFields({ t, form, set }) {
-  const isTabletop = form.markerType === 'tabletop'
   return (
     <>
-      <div className="form-row">
-        <label className="form-label">{t('qr_marker_type')}</label>
-        <select className="form-select" value={form.markerType} onChange={(e) => set('markerType', e.target.value)}>
-          <option value="field">{t('qr_type_field')}</option>
-          <option value="tabletop">{t('qr_type_tabletop')}</option>
-        </select>
-        <p className="text-xs text-text-muted mt-1.5">{isTabletop ? t('qr_type_tabletop_hint') : t('qr_type_field_hint')}</p>
-      </div>
       <div className="form-row-grid">
         <div>
           <label className="form-label">{t('qr_floor')}</label>
-          <input className="form-input" value={form.floor} onChange={(e) => set('floor', e.target.value)} placeholder="Tầng 3" />
+          <input className="form-input" value={form.floor} onChange={(e) => set('floor', e.target.value)} placeholder={t('qr_floor_ph')} />
         </div>
         <div>
           <label className="form-label">{t('qr_size')} (cm)</label>
@@ -338,51 +330,21 @@ function QrMarkerConfigFields({ t, form, set }) {
           <input className="form-input" placeholder="Z" type="number" step="0.1" value={form.z} onChange={(e) => set('z', e.target.value)} />
         </div>
       </div>
-      <div className={`card p-3.5 mb-0 bg-[#F9FAFB] ${isTabletop ? '' : 'opacity-60'}`}>
-        <div className="card-sub mb-3 font-semibold">{t('qr_tabletop_section')}</div>
-        <div className="form-row-grid">
-          <div>
-            <label className="form-label">{t('qr_paper_size')}</label>
-            <select className="form-select" value={form.paperSize} disabled={!isTabletop} onChange={(e) => set('paperSize', e.target.value)}>
-              {QR_PAPER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="form-label">{t('qr_tabletop_scale')}</label>
-            <input className="form-input" type="number" step="0.001" disabled={!isTabletop} value={form.tabletopScale} onChange={(e) => set('tabletopScale', e.target.value)} />
-          </div>
-        </div>
-        <div className="form-row-grid">
-          <div>
-            <label className="form-label">{t('qr_offset_x')}</label>
-            <input className="form-input" type="number" step="0.01" disabled={!isTabletop} value={form.offsetX} onChange={(e) => set('offsetX', e.target.value)} />
-          </div>
-          <div>
-            <label className="form-label">{t('qr_offset_z')}</label>
-            <input className="form-input" type="number" step="0.01" disabled={!isTabletop} value={form.offsetZ} onChange={(e) => set('offsetZ', e.target.value)} />
-          </div>
-        </div>
-        <div className="form-row mb-0">
-          <label className="form-label">{t('qr_paper_rot_y')}</label>
-          <input className="form-input" type="number" step="1" disabled={!isTabletop} value={form.paperRotY} onChange={(e) => set('paperRotY', e.target.value)} />
-        </div>
+      <div className="form-row">
+        <label className="form-label">{t('qr_rotation')}</label>
+        <input className="form-input" type="number" step="0.1" value={form.rotation} onChange={(e) => set('rotation', e.target.value)} />
       </div>
     </>
   )
 }
 
 const QR_FORM_DEFAULTS = {
-  markerType: 'field',
   floor: '',
   sizeCm: 20,
   x: 0,
   y: 0,
   z: 0,
-  paperSize: 'A3',
-  tabletopScale: 0.01,
-  offsetX: 0.15,
-  offsetZ: -0.10,
-  paperRotY: 0,
+  rotation: 0,
 }
 
 function useQrFormState() {
@@ -390,17 +352,12 @@ function useQrFormState() {
   const set = useCallback((key, value) => setForm((prev) => ({ ...prev, [key]: value })), [])
   const reset = useCallback(() => setForm({ ...QR_FORM_DEFAULTS }), [])
   const loadFromMarker = useCallback((m) => setForm({
-    markerType: m.marker_type || 'field',
     floor: m.floor_level || '',
     sizeCm: m.physical_width_m ? Math.round(m.physical_width_m * 100) : 20,
     x: m.bim_pos_x ?? 0,
     y: m.bim_pos_y ?? 0,
     z: m.bim_pos_z ?? 0,
-    paperSize: m.paper_size || 'A3',
-    tabletopScale: m.tabletop_scale ?? 0.01,
-    offsetX: m.offset_to_center_x ?? 0.15,
-    offsetZ: m.offset_to_center_z ?? -0.10,
-    paperRotY: m.paper_rotation_y ?? 0,
+    rotation: m.rotation_angle ?? 0,
   }), [])
   return { form, set, reset, loadFromMarker }
 }
@@ -1529,7 +1486,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
             etaSeconds={uploadProgress.etaSeconds}
             label={
               uploadProgress.phase === 'processing'
-                ? t('bu_upload_phase_process')
+                ? t(`bu_stage_${uploadProgress.stage || 'queued'}`)
                 : t('bu_upload_phase_upload')
             }
             sublabel={
@@ -1563,7 +1520,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
         <div className="form-row-grid">
           <div>
             <label className="form-label">{t('bu_name')}</label>
-            <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tòa A – F4" disabled={submitting} />
+            <input className="form-input" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('bu_name_ph')} disabled={submitting} />
           </div>
           <div>
             <label className="form-label">{t('bu_ver')} <span className="req">*</span></label>
@@ -1617,7 +1574,7 @@ function BimUploadModal({ activeModal, closeModal, toast, t, refreshData }) {
         <div className="flex gap-2 justify-end flex-1">
           <button type="button" className="btn" onClick={closeModal} disabled={submitting}>{t('cancel')}</button>
           <button type="button" className="btn btn-p" disabled={submitting || !canSubmit} onClick={handleCreate}>
-            <Icon name="upload" size={14} /> {submitting ? (uploadProgress?.phase === 'processing' ? t('bu_upload_phase_process') : t('bu_upload_phase_upload')) : 'Upload'}
+            <Icon name="upload" size={14} /> {submitting ? (uploadProgress?.phase === 'processing' ? t('bu_upload_phase_process') : t('bu_upload_phase_upload')) : t('bu_upload_btn')}
           </button>
         </div>
       </div>
@@ -2013,7 +1970,7 @@ function GroupDetailModal({ activeModal, modalData, closeModal, toast, t, refres
                         <Icon name="building" size={20} className="text-primary-dark shrink-0" />
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-[13px] truncate">{p.name}</div>
-                          <div className="text-xs text-text-muted truncate">{p.address || '—'} · {p.status}</div>
+                          <div className="text-xs text-text-muted truncate">{p.address || '—'} · {t(projectStatusLabelKey(p.status))}</div>
                         </div>
                         <button type="button" className="btn btn-sm" onClick={() => { closeModal(); openModal('project', { id: p.id, tab: 'team' }) }}>
                           {t('cg_open_project')}
@@ -2208,7 +2165,7 @@ function FeedbackNewModal({ activeModal, closeModal, toast, t, refreshData, moda
         {locationType === 'qr' && (
           <div className="form-row">
             <label className="form-label">{t('fb_marker_id')}</label>
-            <input className="form-input font-mono text-sm" value={markerId} onChange={(e) => setMarkerId(e.target.value)} placeholder="UUID marker hoặc mã QR" />
+            <input className="form-input font-mono text-sm" value={markerId} onChange={(e) => setMarkerId(e.target.value)} placeholder={t('fb_marker_ph')} />
           </div>
         )}
         {locationType === 'element' && (
@@ -2252,10 +2209,30 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
   const [projectBim, setProjectBim] = useState([])
   const [projectFb, setProjectFb] = useState([])
   const [projectGps, setProjectGps] = useState([])
+  const [editing, setEditing] = useState(false)
+  const [editName, setEditName] = useState('')
+  const [editAddress, setEditAddress] = useState('')
+  const [editStatus, setEditStatus] = useState('active')
+  const [editStart, setEditStart] = useState('')
+  const [editEnd, setEditEnd] = useState('')
+  const [editCover, setEditCover] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const coverInputRef = useRef(null)
   const memberBoxRef = useRef(null)
   const memberSearchTimer = useRef(null)
   const projectId = modalData?.id
   const projectTabs = ['info', 'team', 'qr', 'bim', 'feedback', 'gps']
+
+  const syncEditForm = useCallback((p) => {
+    if (!p) return
+    setEditName(p.name || '')
+    setEditAddress(p.address || '')
+    setEditStatus(p.status === 'completed' ? 'completed' : 'active')
+    setEditStart(p.start_date ? String(p.start_date).slice(0, 10) : '')
+    setEditEnd(p.end_date ? String(p.end_date).slice(0, 10) : '')
+    setEditCover(p.cover_image_url || '')
+  }, [])
 
   const pickedUser = useMemo(
     () => candidates.find((u) => u.id === pickUserId) || team.find((u) => u.id === pickUserId),
@@ -2278,6 +2255,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
     setPickUserId('')
     setMemberQuery('')
     setPickerOpen(false)
+    setEditing(false)
     Promise.all([
       fetchProject(projectId),
       fetchProjectStats(projectId),
@@ -2285,6 +2263,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
     ])
       .then(([p, s, teamRes]) => {
         setProject(p)
+        syncEditForm(p)
         setStats(s)
         setTeam(teamRes.data || [])
         setProjectGroups(teamRes.groups || [])
@@ -2292,7 +2271,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
       })
       .catch((err) => toast('err', err.message))
       .finally(() => setLoading(false))
-  }, [activeModal, projectId, modalData?.tab, toast])
+  }, [activeModal, projectId, modalData?.tab, toast, syncEditForm])
 
   useEffect(() => {
     if (activeModal !== 'project' || tab !== 'team') return
@@ -2463,12 +2442,73 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
     }
   }
 
+  const handleSaveEdit = async () => {
+    if (!editName.trim()) {
+      toast('err', t('pn_name'))
+      return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateProject(projectId, {
+        name: editName.trim(),
+        address: editAddress.trim() || null,
+        status: editStatus,
+        start_date: editStart || null,
+        end_date: editEnd || null,
+        cover_image_url: editCover || null,
+      })
+      setProject(updated)
+      syncEditForm(updated)
+      setEditing(false)
+      refreshProjects()
+      toast('success', t('saved'))
+    } catch (err) {
+      toast('err', err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleCoverFile = async (e) => {
+    const file = e.target.files?.[0]
+    if (coverInputRef.current) coverInputRef.current.value = ''
+    if (!file || !projectId) return
+    setUploadingCover(true)
+    try {
+      const updated = await uploadProjectCover(projectId, file)
+      setProject(updated)
+      syncEditForm(updated)
+      setEditCover(updated.cover_image_url || '')
+      refreshProjects()
+      toast('success', t('saved'))
+    } catch (err) {
+      toast('err', err.message)
+    } finally {
+      setUploadingCover(false)
+    }
+  }
+
+  const handleRemoveCover = async () => {
+    setEditCover('')
+    if (!editing) {
+      try {
+        const updated = await updateProject(projectId, { cover_image_url: null })
+        setProject(updated)
+        syncEditForm(updated)
+        refreshProjects()
+        toast('success', t('saved'))
+      } catch (err) {
+        toast('err', err.message)
+      }
+    }
+  }
+
   return (
     <ModalOverlay id="project" activeModal={activeModal} onClose={closeModal} className="lg">
       <div className="modal-hd">
         <div>
           <div className="modal-title">{project?.name || '...'}</div>
-          <div className="modal-sub">{project?.status}</div>
+          <div className="modal-sub">{project ? t(projectStatusLabelKey(project.status)) : ''}</div>
         </div>
         <ModalClose onClose={closeModal} />
       </div>
@@ -2545,26 +2585,115 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
             </div>
             {tab === 'info' && project && (
               <>
-                <ul className="info-list">
-                  <li><span>{t('pn_name')}</span><b>{project.name}</b></li>
-                  <li><span>{t('pn_addr')}</span><b>{project.address || '—'}</b></li>
-                  <li><span>{t('status')}</span><b>{project.status}</b></li>
-                  <li><span>{t('pn_start')}</span><b>{formatDate(project.created_at)}</b></li>
-                  <li>
-                    <span>{t('prj_groups_title')}</span>
-                    <b>
-                      {projectGroups.length
-                        ? projectGroups.map((g) => g.name).join(', ')
-                        : t('group_none_assigned')}
-                    </b>
-                  </li>
-                </ul>
-                {projectGroups.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {projectGroups.map((g) => (
-                      <span key={g.company_group_id ?? g.id} className="chip chip-blue">{g.name}</span>
-                    ))}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="card-sub font-semibold mb-0">{t('prj_tab_info')}</div>
+                  {canManageProjects && !editing && (
+                    <button
+                      type="button"
+                      className="btn btn-sm ml-auto"
+                      onClick={() => { syncEditForm(project); setEditing(true) }}
+                    >
+                      <Icon name="edit" size={14} /> {t('edit')}
+                    </button>
+                  )}
+                </div>
+
+                <div className="mb-4">
+                  <div className="form-label mb-1.5">{t('prj_cover')}</div>
+                  <div className="relative aspect-[16/9] max-w-md bg-border-light rounded-[10px] overflow-hidden border border-border">
+                    {(editing ? editCover : project.cover_image_url) ? (
+                      <S3Image
+                        src={editing ? editCover : project.cover_image_url}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-text-muted text-sm gap-1 p-4">
+                        <Icon name="building" size={28} className="opacity-40" />
+                        {t('prj_cover_empty')}
+                      </div>
+                    )}
                   </div>
+                  {canManageProjects && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <input
+                        ref={coverInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={handleCoverFile}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={uploadingCover || saving}
+                        onClick={() => coverInputRef.current?.click()}
+                      >
+                        <Icon name="upload" size={14} />
+                        {uploadingCover ? '...' : ((editing ? editCover : project.cover_image_url) ? t('prj_cover_change') : t('prj_cover_upload'))}
+                      </button>
+                      {(editing ? editCover : project.cover_image_url) && (
+                        <button type="button" className="btn btn-sm" disabled={uploadingCover || saving} onClick={handleRemoveCover}>
+                          {t('prj_cover_remove')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {editing ? (
+                  <div className="space-y-3">
+                    <div className="form-row">
+                      <label className="form-label">{t('pn_name')} <span className="req">*</span></label>
+                      <input className="form-input" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                    </div>
+                    <div className="form-row">
+                      <label className="form-label">{t('pn_addr')}</label>
+                      <input className="form-input" value={editAddress} onChange={(e) => setEditAddress(e.target.value)} />
+                    </div>
+                    <div className="form-row-grid">
+                      <div>
+                        <label className="form-label">{t('pn_st')}</label>
+                        <select className="form-select" value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                          <option value="active">{t('prj_st_active')}</option>
+                          <option value="completed">{t('prj_st_completed')}</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="form-label">{t('pn_start')}</label>
+                        <input type="date" className="form-input" value={editStart} onChange={(e) => setEditStart(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="form-label">{t('pn_end')}</label>
+                        <input type="date" className="form-input" value={editEnd} onChange={(e) => setEditEnd(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <ul className="info-list">
+                      <li><span>{t('pn_name')}</span><b>{project.name}</b></li>
+                      <li><span>{t('pn_addr')}</span><b>{project.address || '—'}</b></li>
+                      <li><span>{t('status')}</span><b>{t(projectStatusLabelKey(project.status))}</b></li>
+                      <li><span>{t('pn_start')}</span><b>{formatDate(project.start_date || project.created_at)}</b></li>
+                      <li><span>{t('pn_end')}</span><b>{formatDate(project.end_date)}</b></li>
+                      <li>
+                        <span>{t('prj_groups_title')}</span>
+                        <b>
+                          {projectGroups.length
+                            ? projectGroups.map((g) => g.name).join(', ')
+                            : t('group_none_assigned')}
+                        </b>
+                      </li>
+                    </ul>
+                    {projectGroups.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {projectGroups.map((g) => (
+                          <span key={g.company_group_id ?? g.id} className="chip chip-blue">{g.name}</span>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -2823,13 +2952,29 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
         )}
       </div>
       <div className="modal-ft">
-        {canManageProjects && (
+        {canManageProjects && !editing && (
           <button type="button" className="btn btn-d" onClick={handleDelete}>
             <Icon name="trash" size={14} /> {t('delete')}
           </button>
         )}
         <div className="flex-1" />
-        <button type="button" className="btn" onClick={closeModal}>{t('close')}</button>
+        {editing ? (
+          <>
+            <button
+              type="button"
+              className="btn"
+              disabled={saving}
+              onClick={() => { syncEditForm(project); setEditing(false) }}
+            >
+              {t('cancel')}
+            </button>
+            <button type="button" className="btn btn-p" disabled={saving || uploadingCover} onClick={handleSaveEdit}>
+              {saving ? '...' : t('save')}
+            </button>
+          </>
+        ) : (
+          <button type="button" className="btn" onClick={closeModal}>{t('close')}</button>
+        )}
       </div>
     </ModalOverlay>
   )
@@ -3180,14 +3325,26 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
   const [editVersion, setEditVersion] = useState('')
   const [editDiscipline, setEditDiscipline] = useState('architecture')
   const [editDesc, setEditDesc] = useState('')
+  /** @type {[{ id: string, url?: string, file?: File, localUrl?: string }]} */
+  const [editPreviews, setEditPreviews] = useState([])
   const [saving, setSaving] = useState(false)
+  const previewInputRef = useRef(null)
   const bimId = modalData?.id
   const meta = parseJson(bim?.metadata, {}) || {}
   const gallery = useMemo(() => {
+    if (editing) {
+      return editPreviews.map((p) => p.localUrl || p.url).filter(Boolean)
+    }
     const urls = bim ? getBimPreviewUrls(bim) : []
     return urls.length ? urls : []
-  }, [bim])
+  }, [bim, editing, editPreviews])
   const downloads = useMemo(() => (bim ? bimDownloadLinks(bim) : []), [bim])
+
+  const revokeLocalPreviews = useCallback((items) => {
+    ;(items || []).forEach((p) => {
+      if (p.localUrl) URL.revokeObjectURL(p.localUrl)
+    })
+  }, [])
 
   const syncEditForm = useCallback((model) => {
     if (!model) return
@@ -3196,7 +3353,11 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
     setEditVersion(model.version || '')
     setEditDiscipline(model.discipline_code || model.discipline || 'other')
     setEditDesc(m.description || '')
-  }, [])
+    setEditPreviews((prev) => {
+      revokeLocalPreviews(prev)
+      return getBimPreviewUrls(model).map((url, i) => ({ id: `u-${i}-${url}`, url }))
+    })
+  }, [revokeLocalPreviews])
 
   useEffect(() => {
     if (activeModal !== 'bim-detail' || !bimId) return
@@ -3216,9 +3377,51 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
         setFeedbacks(fb.data || [])
         setGalleryIdx(0)
       })
-      .catch((err) => toast('err', err.message))
+      .catch((err) => {
+        toast('err', err.message)
+        // Stale list after soft-delete: refresh and close
+        if (err?.status === 404) {
+          refreshData()
+          closeModal()
+        }
+      })
       .finally(() => setLoading(false))
-  }, [activeModal, bimId, toast, syncEditForm])
+  }, [activeModal, bimId, toast, syncEditForm, refreshData, closeModal])
+
+  const handleAddPreviewFiles = (e) => {
+    const files = Array.from(e.target.files || [])
+    if (previewInputRef.current) previewInputRef.current.value = ''
+    if (!files.length) return
+    setEditPreviews((prev) => {
+      const room = Math.max(0, 8 - prev.length)
+      const next = files.slice(0, room).map((file, i) => ({
+        id: `f-${Date.now()}-${i}`,
+        file,
+        localUrl: URL.createObjectURL(file),
+      }))
+      return [...prev, ...next]
+    })
+    setGalleryIdx(0)
+  }
+
+  const handleRemovePreview = (id) => {
+    setEditPreviews((prev) => {
+      const target = prev.find((p) => p.id === id)
+      if (target?.localUrl) URL.revokeObjectURL(target.localUrl)
+      const next = prev.filter((p) => p.id !== id)
+      setGalleryIdx((idx) => Math.max(0, Math.min(idx, next.length - 1)))
+      return next
+    })
+  }
+
+  const handleReplacePreview = (id, file) => {
+    if (!file) return
+    setEditPreviews((prev) => prev.map((p) => {
+      if (p.id !== id) return p
+      if (p.localUrl) URL.revokeObjectURL(p.localUrl)
+      return { id: p.id, file, localUrl: URL.createObjectURL(file) }
+    }))
+  }
 
   const handleSaveEdit = async () => {
     if (!editVersion.trim()) {
@@ -3227,17 +3430,32 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
     }
     setSaving(true)
     try {
+      const newFiles = editPreviews.filter((p) => p.file).map((p) => p.file)
+      let uploadedUrls = []
+      if (newFiles.length) {
+        const up = await uploadBimPreviewImages(bimId, newFiles)
+        uploadedUrls = up.urls || []
+      }
+      // Preserve order: walk editPreviews, use uploaded urls for file slots in sequence
+      let uploadIdx = 0
+      const preview_urls = editPreviews.map((p) => {
+        if (p.file) return uploadedUrls[uploadIdx++] || null
+        return p.url
+      }).filter(Boolean).slice(0, 8)
+
       const prevMeta = parseJson(bim?.metadata, {}) || {}
       await updateBimModel(bimId, {
         name: editName.trim() || null,
         version: editVersion.trim(),
         discipline: editDiscipline,
         metadata: { ...prevMeta, description: editDesc.trim() || undefined },
+        preview_urls,
       })
       const model = await fetchBimModel(bimId)
       setBim(model)
       syncEditForm(model)
       setEditing(false)
+      setGalleryIdx(0)
       refreshData()
       toast('success', t('saved'))
     } catch (err) {
@@ -3247,12 +3465,18 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
     }
   }
 
+  const handleCancelEdit = () => {
+    syncEditForm(bim)
+    setEditing(false)
+    setGalleryIdx(0)
+  }
+
   const handleDelete = async () => {
-    if (!window.confirm('Xóa mô hình BIM này?')) return
+    if (!window.confirm(t('bim_delete_confirm'))) return
     try {
       await deleteBimModel(bimId)
-      refreshData()
       closeModal()
+      refreshData()
       toast('success', t('deleted'))
     } catch (err) {
       toast('err', err.message)
@@ -3265,7 +3489,7 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
         <div>
           <div className="modal-title">{bim?.name || '...'}</div>
           <div className="modal-sub">
-            {bim?.project_name} · {bim?.version} · {disciplineLabel(bim)} · {formatDate(bim?.uploaded_at || bim?.created_at)}
+            {bim?.project_name} · {bim?.version} · {disciplineLabel(bim, t)} · {formatDate(bim?.uploaded_at || bim?.created_at)}
           </div>
         </div>
         <ModalClose onClose={closeModal} />
@@ -3292,22 +3516,59 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
                   {gallery.length > 0 ? (
                     <>
                       <div className="relative aspect-[16/10] bg-border-light rounded-[10px] overflow-hidden border border-border mb-2.5">
-                        <S3Image src={gallery[galleryIdx]} alt="" className="w-full h-full object-cover" />
+                        {editing && editPreviews[galleryIdx]?.localUrl ? (
+                          <img src={editPreviews[galleryIdx].localUrl} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <S3Image src={gallery[galleryIdx]} alt="" className="w-full h-full object-cover" />
+                        )}
                         <div className="absolute top-2.5 right-2.5 bg-black/70 text-white px-2.5 py-1 rounded-md text-[11px] backdrop-blur-sm">
                           {galleryIdx + 1} / {gallery.length}
                         </div>
                       </div>
                       <div className={`grid gap-1.5 ${gallery.length > 4 ? 'grid-cols-5' : 'grid-cols-4'}`}>
-                        {gallery.map((src, i) => (
-                          <button
-                            key={src}
-                            type="button"
-                            className={`aspect-square bg-border-light rounded-md overflow-hidden cursor-pointer border-2 p-0 ${galleryIdx === i ? 'border-primary' : 'border-transparent'}`}
-                            onClick={() => setGalleryIdx(i)}
-                          >
-                            <S3Image src={src} alt="" className="w-full h-full object-cover" />
-                          </button>
-                        ))}
+                        {(editing ? editPreviews : gallery.map((url, i) => ({ id: `g-${i}`, url }))).map((item, i) => {
+                          const src = item.localUrl || item.url || item
+                          const key = item.id || `${i}-${src}`
+                          return (
+                            <div key={key} className="relative aspect-square">
+                              <button
+                                type="button"
+                                className={`w-full h-full bg-border-light rounded-md overflow-hidden cursor-pointer border-2 p-0 ${galleryIdx === i ? 'border-primary' : 'border-transparent'}`}
+                                onClick={() => setGalleryIdx(i)}
+                              >
+                                {item.localUrl ? (
+                                  <img src={item.localUrl} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <S3Image src={typeof src === 'string' ? src : item.url} alt="" className="w-full h-full object-cover" />
+                                )}
+                              </button>
+                              {editing && (
+                                <div className="absolute inset-x-0 bottom-0 flex gap-0.5 p-0.5 bg-black/55">
+                                  <label className="flex-1 text-center text-[10px] text-white cursor-pointer py-0.5 hover:bg-white/20 rounded">
+                                    {t('prj_cover_change')}
+                                    <input
+                                      type="file"
+                                      accept="image/png,image/jpeg,image/webp"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const f = e.target.files?.[0]
+                                        if (f) handleReplacePreview(item.id, f)
+                                        e.target.value = ''
+                                      }}
+                                    />
+                                  </label>
+                                  <button
+                                    type="button"
+                                    className="flex-1 text-[10px] text-white py-0.5 hover:bg-white/20 rounded border-0 bg-transparent cursor-pointer"
+                                    onClick={() => handleRemovePreview(item.id)}
+                                  >
+                                    {t('delete')}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     </>
                   ) : (
@@ -3316,7 +3577,28 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
                       {t('bd_no_preview')}
                     </div>
                   )}
-                  <p className="text-xs text-text-muted mt-2 mb-0">{t('bd_preview_hint')}</p>
+                  {editing && (
+                    <div className="mt-2 flex flex-wrap gap-2 items-center">
+                      <input
+                        ref={previewInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        multiple
+                        className="hidden"
+                        onChange={handleAddPreviewFiles}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        disabled={editPreviews.length >= 8 || saving}
+                        onClick={() => previewInputRef.current?.click()}
+                      >
+                        <Icon name="upload" size={14} /> {t('bd_preview_add')}
+                      </button>
+                      <span className="text-xs text-text-muted">{editPreviews.length}/8 · {t('bu_prev_opt')}</span>
+                    </div>
+                  )}
+                  <p className="text-xs text-text-muted mt-2 mb-0">{editing ? t('bd_preview_edit_hint') : t('bd_preview_hint')}</p>
                 </div>
                 <div>
                   <div className="flex items-center gap-2 mb-2">
@@ -3356,13 +3638,14 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
                         <textarea className="form-textarea min-h-[88px]" value={editDesc} onChange={(e) => setEditDesc(e.target.value)} placeholder={t('bu_desc_ph')} />
                       </div>
                       <p className="text-xs text-text-muted m-0">{t('bim_edit_hint')}</p>
+                      <p className="text-xs text-text-muted mt-1 mb-0">{t('bd_preview_edit_hint')}</p>
                     </>
                   ) : (
                     <>
                       <ul className="info-list">
                         <li><span>{t('bd_proj')}</span><b>{bim.project_name}</b></li>
                         <li><span>{t('bd_ver')}</span><b>{bim.version}</b></li>
-                        <li><span>{t('bd_type')}</span><b>{disciplineLabel(bim)}</b></li>
+                        <li><span>{t('bd_type')}</span><b>{disciplineLabel(bim, t)}</b></li>
                         <li><span>{t('bd_date')}</span><b>{formatDateTime(bim.uploaded_at || bim.created_at)}</b></li>
                       </ul>
                       {meta.description && (
@@ -3460,12 +3743,7 @@ function BimDetailModal({ activeModal, modalData, closeModal, openModal, toast, 
         <div className="flex-1" />
         {editing ? (
           <>
-            <button
-              type="button"
-              className="btn"
-              disabled={saving}
-              onClick={() => { syncEditForm(bim); setEditing(false) }}
-            >
+            <button type="button" className="btn" disabled={saving} onClick={handleCancelEdit}>
               {t('cancel')}
             </button>
             <button type="button" className="btn btn-p" disabled={saving} onClick={handleSaveEdit}>

@@ -1,7 +1,21 @@
 import { useI18n, LANGS } from '../context/I18nContext'
+import { useAuth } from '../context/AuthContext'
+import { updateMyLanguage } from '../api/auth.js'
 
 export default function LangSwitcher({ className = '' }) {
   const { lang, setLang } = useI18n()
+  const { user, setUser } = useAuth()
+
+  const handleSelect = async (l) => {
+    setLang(l)
+    if (!user) return
+    try {
+      const updated = await updateMyLanguage(l)
+      setUser((prev) => (prev ? { ...prev, language: updated.language } : prev))
+    } catch {
+      /* keep UI lang even if sync fails */
+    }
+  }
 
   return (
     <div className={`relative z-[110] flex bg-border-light rounded-lg p-0.5 gap-0.5 shrink-0 ${className}`}>
@@ -11,7 +25,7 @@ export default function LangSwitcher({ className = '' }) {
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            setLang(l)
+            handleSelect(l)
           }}
           aria-pressed={lang === l}
           className={`relative z-[1] px-2 sm:px-2.5 py-1.5 bg-transparent border-none cursor-pointer rounded-md text-xs font-semibold transition-all ${

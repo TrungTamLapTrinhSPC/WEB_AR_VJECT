@@ -1,4 +1,4 @@
-import { apiFetch } from './client.js'
+import { apiFetch, API_BASE, getTokens, refreshAccessToken, ApiError, safeFetch } from './client.js'
 
 export function fetchProjects(params = {}) {
   const qs = new URLSearchParams()
@@ -8,10 +8,6 @@ export function fetchProjects(params = {}) {
   if (params.search) qs.set('search', params.search)
   if (params.company_group_id) qs.set('company_group_id', params.company_group_id)
   if (params.attribute_group_id) qs.set('attribute_group_id', params.attribute_group_id)
-  if (params.start_date_from) qs.set('start_date_from', params.start_date_from)
-  if (params.start_date_to) qs.set('start_date_to', params.start_date_to)
-  if (params.end_date_from) qs.set('end_date_from', params.end_date_from)
-  if (params.end_date_to) qs.set('end_date_to', params.end_date_to)
   const query = qs.toString()
   return apiFetch(`/projects${query ? `?${query}` : ''}`)
 }
@@ -34,6 +30,38 @@ export function createProject(body) {
 
 export function updateProject(id, body) {
   return apiFetch(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
+}
+
+/** Upload project cover via backend (multipart) — avoids S3 browser PUT 403/CORS. */
+export async function uploadProjectCover(projectId, file) {
+  const fd = new FormData()
+  fd.append('cover', file, file.name)
+
+  const { access } = getTokens()
+  const headers = {}
+  if (access) headers.Authorization = `Bearer ${access}`
+
+  let res = await safeFetch(`${API_BASE}/projects/${projectId}/cover`, {
+    method: 'POST',
+    headers,
+    body: fd,
+  })
+
+  if (res.status === 401 && access) {
+    const newToken = await refreshAccessToken()
+    if (newToken) {
+      headers.Authorization = `Bearer ${newToken}`
+      res = await safeFetch(`${API_BASE}/projects/${projectId}/cover`, {
+        method: 'POST',
+        headers,
+        body: fd,
+      })
+    }
+  }
+
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw ApiError.fromResponse(res, data)
+  return data
 }
 
 export function deleteProject(id) {

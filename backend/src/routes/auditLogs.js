@@ -6,7 +6,7 @@ import { requireRole } from '../middleware/auth.js'
 import {
   buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
 } from '../utils/cursor.js'
-import { cacheGet, cacheSet, hashFilters } from '../utils/cache.js'
+import { cacheGet, cacheSet, listCacheKey } from '../utils/cache.js'
 
 const router = Router()
 
@@ -16,7 +16,7 @@ router.get('/', requireRole('admin'), asyncHandler(async (req, res) => {
   const cursor = req.query.cursor
   if (cursor && !decodeCursor(cursor)) throw new AppError('VALIDATION_ERROR', 'Invalid cursor')
 
-  const cacheKey = `audit-logs:list:${hashFilters({ search, action, cursor, limit })}`
+  const cacheKey = await listCacheKey('audit-logs', { search, action, cursor, limit })
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 

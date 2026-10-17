@@ -1,3 +1,5 @@
+import { localizeError } from '../data/errorI18n'
+
 /** Backend mounts routes under /api/v1 (see backend/src/index.js). */
 export function normalizeApiBase(raw) {
   const base = (raw || '/api/v1').trim().replace(/\/$/, '')
@@ -8,11 +10,33 @@ export function normalizeApiBase(raw) {
 
 export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_BASE)
 
+/** `message` is localized to the current UI language; the server's original text is kept in `rawMessage`. */
 class ApiError extends Error {
-  constructor(code, message, status) {
-    super(message)
+  constructor(code, message, status, details = []) {
+    super(localizeError({ code, message, status, details }))
     this.code = code
     this.status = status
+    this.details = details
+    this.rawMessage = message
+  }
+
+  static fromResponse(res, data) {
+    return new ApiError(
+      data?.error?.code || 'ERROR',
+      data?.error?.message || res.statusText,
+      res.status,
+      data?.error?.details || [],
+    )
+  }
+}
+
+/** fetch() that turns connection failures into a localized ApiError. */
+export async function safeFetch(url, opts) {
+  try {
+    return await fetch(url, opts)
+  } catch (err) {
+    if (err?.name === 'AbortError') throw err
+    throw new ApiError('NETWORK_ERROR', err?.message || 'Network error', 0)
   }
 }
 
@@ -79,13 +103,13 @@ export async function apiFetch(path, options = {}) {
   const fetchOpts = { ...options }
   delete fetchOpts.skipAuth
 
-  let res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+  let res = await safeFetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
 
   if (!skipAuth && res.status === 401 && access) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers.Authorization = `Bearer ${newToken}`
-      res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+      res = await safeFetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
     }
   }
 
@@ -93,7 +117,7 @@ export async function apiFetch(path, options = {}) {
 
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new ApiError(data.error?.code || 'ERROR', data.error?.message || res.statusText, res.status)
+    throw ApiError.fromResponse(res, data)
   }
   return data
 }
@@ -109,19 +133,19 @@ export async function apiFetchBlob(path, options = {}) {
   const fetchOpts = { ...options }
   delete fetchOpts.skipAuth
 
-  let res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+  let res = await safeFetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
 
   if (res.status === 401 && access) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers.Authorization = `Bearer ${newToken}`
-      res = await fetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
+      res = await safeFetch(`${API_BASE}${path}`, { ...fetchOpts, headers })
     }
   }
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
-    throw new ApiError(data.error?.code || 'ERROR', data.error?.message || res.statusText, res.status)
+    throw ApiError.fromResponse(res, data)
   }
   return res.blob()
 }

@@ -1,6 +1,11 @@
 import nodemailer from 'nodemailer'
 import { config } from '../config/index.js'
 import { AppError } from '../middleware/errorHandler.js'
+import {
+  normalizeLang,
+  verificationEmail,
+  passwordResetEmail,
+} from './emailTemplates.js'
 
 let transporter
 
@@ -38,17 +43,14 @@ export async function sendGenericEmail({ to, subject, text, html }) {
   }
 }
 
-export async function sendPasswordResetEmail(to, resetLink, ttlMinutes = 60) {
-  const subject = 'PA3 — Đặt lại mật khẩu'
-  const text = `Mở link sau để đặt lại mật khẩu (hiệu lực ${ttlMinutes} phút):\n${resetLink}`
-  const html = `<p>Đặt lại mật khẩu PA3 Hybrid AR:</p><p><a href="${resetLink}">${resetLink}</a></p><p>Link hết hạn sau ${ttlMinutes} phút.</p>`
+export async function sendPasswordResetEmail(to, code, { ttlMinutes = 60, lang = 'vi' } = {}) {
+  const { subject, text, html } = passwordResetEmail(lang, { code, ttlMinutes })
   await sendGenericEmail({ to, subject, text, html })
 }
 
-export async function sendVerificationEmail(to, code) {
-  const subject = 'PA3 — Mã kích hoạt tài khoản'
-  const text = `Mã kích hoạt tài khoản PA3 Hybrid AR của bạn: ${code}\n\nMã có hiệu lực ${config.emailVerification.codeTtlMinutes} phút.`
-  const html = `<p>Mã kích hoạt tài khoản <strong>PA3 Hybrid AR</strong>:</p><p style="font-size:24px;font-weight:bold;letter-spacing:4px">${code}</p><p>Mã có hiệu lực ${config.emailVerification.codeTtlMinutes} phút.</p>`
+export async function sendVerificationEmail(to, code, { lang = 'vi' } = {}) {
+  const ttl = config.emailVerification.codeTtlMinutes
+  const { subject, text, html } = verificationEmail(lang, { code, ttlMinutes: ttl })
 
   const transport = getTransporter()
   if (!transport) {
@@ -73,6 +75,8 @@ export async function sendVerificationEmail(to, code) {
     )
   }
 }
+
+export { normalizeLang }
 
 export function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())

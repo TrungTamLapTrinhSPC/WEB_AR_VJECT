@@ -1,0 +1,259 @@
+import { Router } from 'express'
+import { v4 as uuidv4 } from 'uuid'
+import { query, queryOne } from '../db/pool.js'
+import { config } from '../config/index.js'
+import { asyncHandler, AppError } from '../middleware/errorHandler.js'
+import { requireRole } from '../middleware/auth.js'
+import {
+  buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
+} from '../utils/cursor.js'
+import { cacheGet, cacheSet, hashFilters, invalidateResource, cacheDel } from '../utils/cache.js'
+import { notifyFeedbackComment } from '../utils/notify.js'
+
+const router = Router()
+
+const FEEDBACK_FROM = `
+  FROM feedbacks f
+  JOIN users u ON u.id = f.user_id
+  LEFT JOIN bim_models bm ON bm.id = f.models_id AND bm.deleted_at IS NULL
+  LEFT JOIN projects p ON p.id = bm.project_id AND p.deleted_at IS NULL
+  LEFT JOIN qr_markers q ON q.id = f.marker_id AND q.deleted_at IS NULL
+`
+
+async function fetchFeedbackDetail(id) {
+  return queryOne(
+    `SELECT f.*, u.full_name AS user_name, u.email AS user_email,
+            bm.name AS model_name, bm.project_id,
+            p.name AS project_name,
+            q.marker_code AS marker_code
+     ${FEEDBACK_FROM}
+     WHERE f.id = ? AND f.deleted_at IS NULL`,
+    [id],
+  )
+}
+
+router.get('/board', asyncHandler(async (_req, res) => {
+  const cacheKey = 'feedbacks:board'
+  const cached = await cacheGet(cacheKey)
+  if (cached) return res.json(cached)
+
+  const rows = await query(
+    `SELECT f.id, f.title, f.content, f.priority, f.status, f.created_at, f.images,
+            u.full_name AS user_name, f.location_type, f.marker_id,
+            bm.name AS model_name, p.name AS project_name, p.id AS project_id,
+            q.marker_code AS marker_code
+     ${FEEDBACK_FROM}
+     WHERE f.deleted_at IS NULL
+     ORDER BY f.created_at DESC`,
+  )
+
+  const board = { open: [], in_progress: [], resolved: [], closed: [] }
+  for (const row of rows) {
+    if (['open', 'pending'].includes(row.status)) board.open.push(row)
+    else if (row.status === 'in_progress') board.in_progress.push(row)
+    else if (['resolved', 'approved'].includes(row.status)) board.resolved.push(row)
+    else board.closed.push(row)
+  }
+
+  await cacheSet(cacheKey, board, config.cache.list)
+  res.json(board)
+}))
+
+router.get('/', asyncHandler(async (req, res) => {
+  const limit = clampLimit(req.query.limit)
+  const { status, priority, user_id, search, project_id } = req.query
+  const cursor = req.query.cursor
+  if (cursor && !decodeCursor(cursor)) throw new AppError('VALIDATION_ERROR', 'Invalid cursor')
+
+  const cacheKey = `feedbacks:list:${hashFilters({ status, priority, user_id, search, project_id, cursor, limit })}`
+  const cached = await cacheGet(cacheKey)
+  if (cached) return res.json(cached)
+
+  const params = []
+  let where = 'WHERE f.deleted_at IS NULL'
+  if (status) { where += ' AND f.status = ?'; params.push(status) }
+  if (priority) { where += ' AND f.priority = ?'; params.push(priority) }
+  if (user_id) { where += ' AND f.user_id = ?'; params.push(user_id) }
+  if (project_id) { where += ' AND bm.project_id = ?'; params.push(project_id) }
+  if (search) {
+    where += ' AND (f.title LIKE ? OR f.content LIKE ?)'
+    params.push(`%${search}%`, `%${search}%`)
+  }
+
+  const { clause, params: cursorParams } = buildCursorClause(cursor, 'f')
+  where += clause
+  params.push(...cursorParams, limit + 1)
+
+  const rows = await query(
+    `SELECT f.id, f.title, f.content, f.priority, f.status, f.images, f.location_type,
+            f.lat, f.lng, f.element_guid, f.marker_id, f.created_at,
+            u.full_name AS user_name, u.id AS user_id,
+            bm.name AS model_name, bm.project_id, p.name AS project_name,
+            q.marker_code AS marker_code
+     ${FEEDBACK_FROM}
+     ${where}
+     ORDER BY f.created_at DESC, f.id DESC LIMIT ?`,
+    params,
+  )
+
+  const result = paginatedResponse(rows, limit)
+  await cacheSet(cacheKey, result, config.cache.list)
+  res.json(result)
+}))
+
+router.get('/:id', asyncHandler(async (req, res) => {
+  const cacheKey = `feedbacks:${req.params.id}`
+  const cached = await cacheGet(cacheKey)
+  if (cached) return res.json(cached)
+
+  const fb = await fetchFeedbackDetail(req.params.id)
+  if (!fb) throw new AppError('NOT_FOUND', 'Feedback not found', 404)
+
+  await cacheSet(cacheKey, fb, config.cache.detail)
+  res.json(fb)
+}))
+
+router.get('/:id/comments', asyncHandler(async (req, res) => {
+  const fb = await queryOne(
+    'SELECT id FROM feedbacks WHERE id = ? AND deleted_at IS NULL',
+    [req.params.id],
+  )
+  if (!fb) throw new AppError('NOT_FOUND', 'Feedback not found', 404)
+
+  const rows = await query(
+    `SELECT c.id, c.body, c.created_at, c.user_id,
+            u.full_name AS user_name, u.role AS user_role, u.email AS user_email
+     FROM feedback_comments c
+     JOIN users u ON u.id = c.user_id
+     WHERE c.feedback_id = ?
+     ORDER BY c.created_at ASC`,
+    [req.params.id],
+  )
+  res.json({ data: rows })
+}))
+
+router.post('/:id/comments', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {
+  const body = req.body?.body?.trim()
+  if (!body) throw new AppError('VALIDATION_ERROR', 'body required')
+
+  const fb = await queryOne(
+    'SELECT id, title FROM feedbacks WHERE id = ? AND deleted_at IS NULL',
+    [req.params.id],
+  )
+  if (!fb) throw new AppError('NOT_FOUND', 'Feedback not found', 404)
+
+  const id = uuidv4()
+  await query(
+    `INSERT INTO feedback_comments (id, feedback_id, user_id, body, created_at)
+     VALUES (?, ?, ?, ?, NOW())`,
+    [id, req.params.id, req.user.sub, body],
+  )
+
+  const author = await queryOne(
+    'SELECT full_name, role FROM users WHERE id = ?',
+    [req.user.sub],
+  )
+
+  notifyFeedbackComment({
+    feedbackId: req.params.id,
+    feedbackTitle: fb.title,
+    commentBody: body,
+    authorName: author?.full_name || 'User',
+    authorRole: author?.role || req.user.role,
+    authorUserId: req.user.sub,
+  }).catch((err) => console.error('[notify] feedback comment:', err.message))
+
+  await invalidateResource('feedbacks', req.params.id)
+  const row = await queryOne(
+    `SELECT c.id, c.body, c.created_at, c.user_id,
+            u.full_name AS user_name, u.role AS user_role
+     FROM feedback_comments c
+     JOIN users u ON u.id = c.user_id
+     WHERE c.id = ?`,
+    [id],
+  )
+  res.status(201).json(row)
+}))
+
+router.post('/', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {
+  const {
+    models_id, title, content, priority = 'normal',
+    location_type = 'gps', marker_id, lat, lng, images, element_guid,
+  } = req.body
+  const user_id = req.body.user_id || req.user.sub
+  if (!content) {
+    throw new AppError('VALIDATION_ERROR', 'content required')
+  }
+
+  const id = uuidv4()
+  await query(
+    `INSERT INTO feedbacks (id, user_id, models_id, title, content, priority, element_guid,
+      images, location_type, marker_id, lat, lng, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', NOW(), NOW())`,
+    [id, user_id, models_id || null, title || null, content, priority, element_guid || null,
+      images ? JSON.stringify(images) : null, location_type, marker_id || null, lat ?? null, lng ?? null],
+  )
+
+  await invalidateResource('feedbacks')
+  await cacheDel('feedbacks:board')
+  res.status(201).json(await fetchFeedbackDetail(id))
+}))
+
+function normalizeImages(images) {
+  if (images === undefined) return undefined
+  if (images === null) return null
+  const list = Array.isArray(images) ? images : []
+  return JSON.stringify(list.filter(Boolean))
+}
+
+router.patch('/:id', requireRole('admin', 'bql', 'engineer'), asyncHandler(async (req, res) => {
+  const {
+    title, content, priority, status, models_id, location_type,
+    marker_id, lat, lng, element_guid, images,
+  } = req.body
+
+  const sets = ['updated_at = NOW()']
+  const params = []
+
+  if (title !== undefined) { sets.push('title = ?'); params.push(title || null) }
+  if (content !== undefined) { sets.push('content = ?'); params.push(content) }
+  if (priority !== undefined) { sets.push('priority = ?'); params.push(priority) }
+  if (status !== undefined) { sets.push('status = ?'); params.push(status) }
+  if (models_id !== undefined) { sets.push('models_id = ?'); params.push(models_id || null) }
+  if (location_type !== undefined) { sets.push('location_type = ?'); params.push(location_type) }
+  if (marker_id !== undefined) { sets.push('marker_id = ?'); params.push(marker_id || null) }
+  if (element_guid !== undefined) { sets.push('element_guid = ?'); params.push(element_guid || null) }
+  if (lat !== undefined) { sets.push('lat = ?'); params.push(lat === '' || lat == null ? null : Number(lat)) }
+  if (lng !== undefined) { sets.push('lng = ?'); params.push(lng === '' || lng == null ? null : Number(lng)) }
+  if (images !== undefined) {
+    sets.push('images = ?')
+    params.push(normalizeImages(images))
+  }
+
+  if (sets.length === 1) {
+    throw new AppError('VALIDATION_ERROR', 'No fields to update')
+  }
+
+  params.push(req.params.id)
+  const existing = await queryOne(
+    'SELECT id FROM feedbacks WHERE id = ? AND deleted_at IS NULL',
+    [req.params.id],
+  )
+  if (!existing) throw new AppError('NOT_FOUND', 'Feedback not found', 404)
+
+  await query(
+    `UPDATE feedbacks SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`,
+    params,
+  )
+  await invalidateResource('feedbacks', req.params.id)
+  await cacheDel('feedbacks:board')
+  res.json(await fetchFeedbackDetail(req.params.id))
+}))
+
+router.delete('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
+  await query('UPDATE feedbacks SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL', [req.params.id])
+  await invalidateResource('feedbacks', req.params.id)
+  res.status(204).send()
+}))
+
+export default router

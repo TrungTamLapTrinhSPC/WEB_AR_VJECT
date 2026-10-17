@@ -80,6 +80,13 @@ function handleChunkMulter(err, next) {
 
 async function saveChunkFromRequest(req, res) {
   let buf = req.file?.buffer
+  if (!buf && Array.isArray(req.files) && req.files[0]?.buffer) {
+    buf = req.files[0].buffer
+  }
+  if (!buf && req.files && typeof req.files === 'object') {
+    const first = Object.values(req.files).flat()[0]
+    if (first?.buffer) buf = first.buffer
+  }
   if (!buf && Buffer.isBuffer(req.body) && req.body.length) {
     buf = req.body
   }
@@ -145,10 +152,7 @@ router.get('/', asyncHandler(async (req, res) => {
 }))
 
 function handleIfcUpload(req, res, next) {
-  ifcMultipart.fields([
-    { name: 'ifc', maxCount: 1 },
-    { name: 'preview', maxCount: 8 },
-  ])(req, res, (err) => {
+  ifcMultipart.any()(req, res, (err) => {
     if (!err) return next()
     if (err.code === 'LIMIT_FILE_SIZE') {
       return next(new AppError('VALIDATION_ERROR', 'IFC file too large (max 500MB)', 413))
@@ -158,8 +162,11 @@ function handleIfcUpload(req, res, next) {
 }
 
 function handlePreviewUpload(req, res, next) {
-  ifcMultipart.fields([{ name: 'preview', maxCount: 8 }])(req, res, (err) => {
+  ifcMultipart.any()(req, res, (err) => {
     if (!err) return next()
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return next(new AppError('VALIDATION_ERROR', 'File too large (max 500MB)', 413))
+    }
     return next(new AppError('VALIDATION_ERROR', err.message || 'Upload failed', 400))
   })
 }
@@ -190,20 +197,53 @@ async function validateIfcUploadRequest(req, body) {
 
   await assertProjectAccess(req.user.sub, req.user.role, project_id)
 
-  return { project_id, name, version, disciplineId, description }
+  let overrideDisciplineColors = false
+  const rawOverride = body.override_discipline_colors ?? body.overrideDisciplineColors ?? req.query?.override_discipline_colors ?? req.query?.overrideDisciplineColors
+  if (rawOverride === true || rawOverride === 'true' || rawOverride === '1' || rawOverride === 1) {
+    overrideDisciplineColors = true
+  } else if (typeof rawOverride === 'string' && rawOverride.trim()) {
+    try {
+      overrideDisciplineColors = JSON.parse(rawOverride)
+    } catch {
+      overrideDisciplineColors = rawOverride.split(',').map((s) => s.trim()).filter(Boolean)
+    }
+  } else if (Array.isArray(rawOverride) || (rawOverride && typeof rawOverride === 'object')) {
+    overrideDisciplineColors = rawOverride
+  }
+
+  let boostColorVibrancy = true
+  const rawBoost = body.boost_color_vibrancy ?? body.boostColorVibrancy ?? req.query?.boost_color_vibrancy ?? req.query?.boostColorVibrancy
+  if (rawBoost === false || rawBoost === 'false' || rawBoost === '0' || rawBoost === 0) {
+    boostColorVibrancy = false
+  }
+
+  return { project_id, name, version, disciplineId, description, overrideDisciplineColors, boostColorVibrancy }
 }
 
 async function processIfcAtPath(req, res, {
-  ifcPath, ifcOriginalName, previews, project_id, name, version, disciplineId, description,
+  ifcPath, ifcOriginalName, previews = [], project_id, name, version, disciplineId, description, overrideDisciplineColors, boostColorVibrancy = true, extraCleanup = [],
 }) {
   const modelId = uuidv4()
   const workDir = path.join(ifcUploadRoot, modelId)
-  const cleanup = [ifcPath, ...previews.map((p) => p.path)]
+  const cleanup = [ifcPath, ...previews.map((p) => p.path), ...extraCleanup]
+
+  const discRow = await queryOne('SELECT code FROM disciplines WHERE id = ?', [disciplineId])
+  const disciplineCode = normalizeDisciplineCode(discRow?.code)
+
+  const tStart = Date.now()
+  console.log(`[upload-ifc] Model ${modelId}: Start processing "${ifcOriginalName || 'model.ifc'}" (project: ${project_id}, disc: ${disciplineCode})`)
 
   let outputs
   try {
     await fs.mkdir(workDir, { recursive: true })
-    outputs = await convertIfcToOutputs(ifcPath, workDir, 'model')
+    const tConvStart = Date.now()
+    outputs = await convertIfcToOutputs(ifcPath, workDir, 'model', {
+      discipline: disciplineCode,
+      displayName: name || disciplineCode,
+      overrideDisciplineColors,
+      boostColorVibrancy,
+    })
+    console.log(`[upload-ifc] Model ${modelId}: IFC conversion completed in ${Date.now() - tConvStart}ms`)
   } catch (err) {
     console.error('[upload-ifc] conversion:', err)
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {})
@@ -217,38 +257,73 @@ async function processIfcAtPath(req, res, {
   const modelFiles = { s3_prefix: prefix }
 
   try {
+    const tUpStart = Date.now()
     const ifcBuf = await fs.readFile(ifcPath)
-    const ifcUp = await uploadObject(`${prefix}/source.ifc`, ifcBuf, 'application/octet-stream')
-    modelFiles.ifc_url = ifcUp.publicUrl
-
     const glbBuf = await fs.readFile(outputs.glbPath)
-    const glbUp = await uploadObject(`${prefix}/model.glb`, glbBuf, 'model/gltf-binary')
-    modelFiles.glb_url = glbUp.publicUrl
-    modelFiles.asset_bundle_url = glbUp.publicUrl
-
-    if (outputs.usdzPath) {
-      const usdzBuf = await fs.readFile(outputs.usdzPath)
-      const usdzUp = await uploadObject(`${prefix}/model.usdz`, usdzBuf, 'model/vnd.usdz+zip')
-      modelFiles.usdz_url = usdzUp.publicUrl
-    }
-
     const metaRaw = await fs.readFile(outputs.metadataPath, 'utf8')
-    const metaUp = await uploadObject(`${prefix}/metadata.json`, metaRaw, 'application/json')
-    modelFiles.metadata_url = metaUp.publicUrl
 
-    const previewUrls = []
-    for (let i = 0; i < previews.length; i += 1) {
-      const prev = previews[i]
-      const ext = path.extname(prev.originalname).toLowerCase() || '.jpg'
-      const mime = prev.mimetype || 'image/jpeg'
-      const buf = await fs.readFile(prev.path)
-      const key = `${prefix}/preview-${i + 1}${ext}`
-      const up = await uploadObject(key, buf, mime)
-      previewUrls.push(up.publicUrl)
+    let usdzBuf = null
+    if (outputs.usdzPath) {
+      usdzBuf = await fs.readFile(outputs.usdzPath).catch(() => null)
     }
-    if (previewUrls.length) {
-      modelFiles.preview_urls = previewUrls
-      modelFiles.preview_url = previewUrls[0]
+
+    let psetsRaw = null
+    if (outputs.psetsPath) {
+      psetsRaw = await fs.readFile(outputs.psetsPath, 'utf8').catch(() => null)
+    }
+
+    const uploadTasks = [
+      uploadObject(`${prefix}/source.ifc`, ifcBuf, 'application/octet-stream').then((up) => {
+        modelFiles.ifc_url = up.publicUrl
+      }),
+      uploadObject(`${prefix}/model.glb`, glbBuf, 'model/gltf-binary').then((up) => {
+        modelFiles.glb_url = up.publicUrl
+        modelFiles.asset_bundle_url = up.publicUrl
+      }),
+      uploadObject(`${prefix}/metadata.json`, metaRaw, 'application/json').then((up) => {
+        modelFiles.metadata_url = up.publicUrl
+        modelFiles.metadata_version = outputs.metadataVersion ?? 2
+      }),
+    ]
+
+    if (usdzBuf) {
+      uploadTasks.push(
+        uploadObject(`${prefix}/model.usdz`, usdzBuf, 'model/vnd.usdz+zip').then((up) => {
+          modelFiles.usdz_url = up.publicUrl
+        }),
+      )
+    }
+
+    if (psetsRaw) {
+      const psetsKey = `${prefix}/${outputs.discipline || disciplineCode}_psets.json`
+      uploadTasks.push(
+        uploadObject(psetsKey, psetsRaw, 'application/json').then((up) => {
+          modelFiles.psets_url = up.publicUrl
+        }),
+      )
+    }
+
+    const previewUrls = new Array(previews.length)
+    previews.forEach((prev, i) => {
+      uploadTasks.push(
+        (async () => {
+          const ext = path.extname(prev.originalname).toLowerCase() || '.jpg'
+          const mime = prev.mimetype || 'image/jpeg'
+          const buf = await fs.readFile(prev.path)
+          const key = `${prefix}/preview-${i + 1}${ext}`
+          const up = await uploadObject(key, buf, mime)
+          previewUrls[i] = up.publicUrl
+        })(),
+      )
+    })
+
+    await Promise.all(uploadTasks)
+    console.log(`[upload-ifc] Model ${modelId}: S3 parallel uploads completed in ${Date.now() - tUpStart}ms`)
+
+    const validPreviewUrls = previewUrls.filter(Boolean)
+    if (validPreviewUrls.length) {
+      modelFiles.preview_urls = validPreviewUrls
+      modelFiles.preview_url = validPreviewUrls[0]
     }
 
     let fullMeta = {}
@@ -257,11 +332,24 @@ async function processIfcAtPath(req, res, {
     } catch {
       fullMeta = {}
     }
+    const summary = fullMeta.version === 2
+      ? {
+        total_elements: fullMeta.elementsSummary?.total_elements,
+        elements_with_geometry: fullMeta.elementsSummary?.elements_with_geometry,
+        type_counts: fullMeta.elementsSummary?.type_counts,
+        length_unit_scale_to_meters: fullMeta.unitScale,
+        rtc_center_offset: fullMeta.rtcCenter,
+      }
+      : fullMeta.summary
+
     const dbMetadata = {
       description: description || undefined,
-      summary: fullMeta.summary,
-      preview_urls: previewUrls.length ? previewUrls : undefined,
+      metadata_version: fullMeta.version ?? outputs.metadataVersion ?? 2,
+      summary,
+      elementsSummary: fullMeta.elementsSummary,
+      preview_urls: validPreviewUrls.length ? validPreviewUrls : undefined,
       metadata_url: modelFiles.metadata_url,
+      psets_url: modelFiles.psets_url,
     }
 
     await query(
@@ -274,6 +362,7 @@ async function processIfcAtPath(req, res, {
 
     await invalidateResource('bim-models')
     const model = await fetchBimRow(modelId)
+    console.log(`[upload-ifc] Model ${modelId}: Total process finished in ${Date.now() - tStart}ms`)
     res.status(201).json(model)
   } catch (err) {
     console.error('[upload-ifc] upload/db:', err)
@@ -310,7 +399,7 @@ router.put(
 router.post(
   '/upload-ifc/chunk-session/:uploadId/chunk/:index',
   requireRole('admin', 'bql', 'engineer'),
-  (req, res, next) => chunkMem.single('chunk')(req, res, (err) => handleChunkMulter(err, next)),
+  (req, res, next) => chunkMem.any()(req, res, (err) => handleChunkMulter(err, next)),
   asyncHandler(saveChunkFromRequest),
 )
 
@@ -319,9 +408,24 @@ router.post(
   requireRole('admin', 'bql', 'engineer'),
   handlePreviewUpload,
   asyncHandler(async (req, res) => {
+    if (req.setTimeout) req.setTimeout(600000)
+    if (res.setTimeout) res.setTimeout(600000)
+
     const fields = await validateIfcUploadRequest(req, req.body)
     const { uploadId } = req.params
-    const previews = req.files?.preview || []
+
+    const allFiles = Array.isArray(req.files)
+      ? req.files
+      : Object.values(req.files || {}).flat()
+
+    // Accept preview images under any field name ('preview', 'previews', 'image', 'file', etc.)
+    // Filter out .ifc files in case client re-sent the source IFC file
+    const previews = allFiles.filter((f) => {
+      const ext = path.extname(f.originalname || '').toLowerCase()
+      const isIfc = f.fieldname === 'ifc' || ext === '.ifc'
+      return !isIfc
+    })
+    const extraCleanup = allFiles.filter((f) => !previews.includes(f)).map((f) => f.path).filter(Boolean)
 
     let mergedPath
     try {
@@ -331,6 +435,7 @@ router.post(
         ifcPath: mergedPath,
         ifcOriginalName: merged.meta.filename,
         previews,
+        extraCleanup,
         ...fields,
       })
     } finally {
@@ -344,21 +449,32 @@ router.post(
   requireRole('admin', 'bql', 'engineer'),
   handleIfcUpload,
   asyncHandler(async (req, res) => {
+    if (req.setTimeout) req.setTimeout(600000)
+    if (res.setTimeout) res.setTimeout(600000)
+
     const fields = await validateIfcUploadRequest(req, req.body)
 
-    const ifcFile = req.files?.ifc?.[0]
+    const allFiles = Array.isArray(req.files)
+      ? req.files
+      : Object.values(req.files || {}).flat()
+
+    const ifcFile = allFiles.find((f) => f.fieldname === 'ifc' || /\.ifc$/i.test(f.originalname || ''))
+      || (allFiles.length === 1 ? allFiles[0] : null)
+
     if (!ifcFile) throw new AppError('VALIDATION_ERROR', 'IFC file required')
     const ifcName = ifcFile.originalname || ''
     if (!/\.ifc$/i.test(ifcName) && !/ifc/i.test(ifcFile.mimetype || '')) {
       throw new AppError('VALIDATION_ERROR', 'File must be .ifc')
     }
 
-    const previews = req.files?.preview || []
+    const previews = allFiles.filter((f) => f !== ifcFile)
+    const extraCleanup = allFiles.filter((f) => f !== ifcFile && !previews.includes(f)).map((f) => f.path).filter(Boolean)
 
     await processIfcAtPath(req, res, {
       ifcPath: ifcFile.path,
       ifcOriginalName: ifcName,
       previews,
+      extraCleanup,
       ...fields,
     })
   }),
@@ -368,11 +484,15 @@ router.get('/:id/offline-manifest', asyncHandler(async (req, res) => {
   const model = await fetchBimRow(req.params.id)
   if (!model) throw new AppError('NOT_FOUND', 'BIM model not found', 404)
 
+  const files = typeof model.model_files === 'string'
+    ? JSON.parse(model.model_files)
+    : (model.model_files || {})
+
   const assets = []
-  if (model.glb_url) assets.push({ type: 'glb', url: model.glb_url })
-  if (model.usdz_url) assets.push({ type: 'usdz', url: model.usdz_url })
-  if (model.asset_bundle_url) assets.push({ type: 'bundle', url: model.asset_bundle_url })
-  if (model.ifc_file_url) assets.push({ type: 'ifc', url: model.ifc_file_url })
+  if (files.glb_url) assets.push({ type: 'glb', url: files.glb_url })
+  if (files.usdz_url) assets.push({ type: 'usdz', url: files.usdz_url })
+  if (files.asset_bundle_url) assets.push({ type: 'bundle', url: files.asset_bundle_url })
+  if (files.ifc_url) assets.push({ type: 'ifc', url: files.ifc_url })
 
   let element_styles = []
   try {
@@ -390,6 +510,9 @@ router.get('/:id/offline-manifest', asyncHandler(async (req, res) => {
     name: model.name,
     version: model.version,
     assets,
+    metadata_url: files.metadata_url || null,
+    psets_url: files.psets_url || null,
+    metadata_version: files.metadata_version ?? null,
     element_styles,
     generated_at: new Date().toISOString(),
     note: 'Mobile app: cache these URLs locally for offline drawing view.',

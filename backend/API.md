@@ -150,6 +150,19 @@ Invalidate cache khi `POST` / `PATCH` / `DELETE` trên resource tương ứng.
 
 **GET `/bim-models` filters:** `project_id`, `discipline`, `search`, `active_only`
 
+**Upload IFC (chunked, convert chạy nền):**
+
+| Method | Endpoint | Ghi chú |
+|--------|----------|---------|
+| POST | `/bim-models/upload-ifc/chunk-session` | Tạo phiên upload → `{ uploadId, chunkSize, totalChunks }` |
+| POST/PUT | `/bim-models/upload-ifc/chunk-session/:uploadId/chunk/:index` | Gửi từng chunk 5 MB |
+| POST | `/bim-models/upload-ifc/chunk-session/:uploadId/complete` | Form: `project_id`, `name`, `version`, `discipline`, `description`, `preview[]` → **202** `{ job_id, status, progress }` |
+| GET | `/bim-models/upload-jobs/:jobId` | Poll ~1,5 s → `{ status: queued\|processing\|done\|failed, stage, progress (0–100), model, error }` |
+
+`stage`: `queued`, `merging`, `parsing`, `geometry`, `metadata`, `export_glb`, `export_usdz`, `uploading`, `done`, `failed`. Khi `status = done`, `model` là bản ghi BIM vừa tạo. Job lưu trong Redis 24 giờ; chỉ người tạo hoặc admin xem được.
+
+Convert chạy trong worker thread; số job convert đồng thời giới hạn bởi env `IFC_CONVERT_CONCURRENCY` (mặc định 1, mỗi job có thể dùng ~2 GB RAM). `POST /bim-models/upload-ifc` (multipart một lần) vẫn chạy đồng bộ và trả **201**.
+
 ---
 
 ## 5. QR Markers
@@ -164,11 +177,9 @@ Invalidate cache khi `POST` / `PATCH` / `DELETE` trên resource tương ứng.
 | GET | `/qr-markers/:id/qr-image` | Download PNG QR | — |
 | POST | `/qr-markers/import` | Import CSV | — |
 
-**GET `/qr-markers` filters:** `project_id`, `floor_level`, `marker_type` (`field` \| `tabletop`), `search`
+**GET `/qr-markers` filters:** `project_id`, `floor_level`, `search`
 
-**POST/PATCH body (AR):** `marker_type`, `paper_size`, `tabletop_scale`, `offset_to_center_x`, `offset_to_center_z`, `paper_rotation_y` (tabletop); plus `physical_width_m`, `bim_pos_*`, `floor_level`, …
-
-Migration: `migrations/004_qr_marker_tabletop.sql`
+**POST/PATCH body:** `marker_code`, `project_id`, `floor_level`, `physical_width_m`, `bim_pos_x`, `bim_pos_y`, `bim_pos_z`, `rotation_angle` (độ), `valid_days` / `expires_at`
 
 ---
 

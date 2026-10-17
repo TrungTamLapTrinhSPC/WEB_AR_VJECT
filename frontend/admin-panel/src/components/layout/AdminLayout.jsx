@@ -1,10 +1,12 @@
 import { Outlet } from 'react-router-dom'
 import { useApp } from '../../context/AppContext'
+import { useI18n } from '../../context/I18nContext'
 import Header from './Header'
 import Sidebar from './Sidebar'
 
 export default function AdminLayout() {
   const { sidebarOpen, closeSidebar } = useApp()
+  const { t } = useI18n()
 
   return (
     <div className="flex flex-col h-[100dvh] md:grid md:grid-cols-[240px_1fr] md:grid-rows-[auto_1fr]">
@@ -13,7 +15,7 @@ export default function AdminLayout() {
         <button
           type="button"
           className="fixed inset-0 bg-slate-900/45 z-[150] md:hidden border-none cursor-default"
-          aria-label="Đóng menu"
+          aria-label={t('close_menu')}
           onClick={closeSidebar}
         />
       )}

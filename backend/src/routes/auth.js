@@ -7,14 +7,16 @@ import { query, queryOne } from '../db/pool.js'
 import { config } from '../config/index.js'
 import { asyncHandler, AppError } from '../middleware/errorHandler.js'
 import { authenticate } from '../middleware/auth.js'
-import { cacheGet, cacheSet, invalidateResource } from '../utils/cache.js'
+import { cacheGet, cacheSet, cacheDel, invalidateResource } from '../utils/cache.js'
 import { getUserProjectIds } from '../utils/userProjects.js'
 import {
   assertAllowedRegistrationEmail, isValidEmail, sendVerificationEmail, sendPasswordResetEmail,
+  normalizeLang,
 } from '../utils/email.js'
 import { assertStrongPassword, getPasswordPolicy } from '../utils/passwordPolicy.js'
 
 const router = Router()
+const RESET_CODE_TTL_MINUTES = 60
 
 function signTokens(user, { remember = false } = {}) {
   const payload = { sub: user.id, email: user.email, role: user.role }
@@ -28,8 +30,13 @@ function signTokens(user, { remember = false } = {}) {
   return { access_token, refresh_token, expires_in: expiresSec }
 }
 
+/** 6-digit numeric code (100000–999999). */
 function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000))
+  return String(crypto.randomInt(100000, 1000000))
+}
+
+function hashResetCode(code) {
+  return crypto.createHash('sha256').update(String(code).trim()).digest('hex')
 }
 
 async function createEmailVerification(userId) {
@@ -70,7 +77,7 @@ router.post('/register', asyncHandler(async (req, res) => {
   )
 
   const code = await createEmailVerification(id)
-  await sendVerificationEmail(normalizedEmail, code)
+  await sendVerificationEmail(normalizedEmail, code, { lang: normalizeLang(language) })
   await invalidateResource('users')
 
   res.status(201).json({
@@ -120,11 +127,11 @@ router.post('/verify-email', asyncHandler(async (req, res) => {
 }))
 
 router.post('/resend-verification', asyncHandler(async (req, res) => {
-  const { email } = req.body
+  const { email, language } = req.body
   if (!email || !isValidEmail(email)) throw new AppError('VALIDATION_ERROR', 'Valid email required')
 
   const user = await queryOne(
-    'SELECT id, email, email_verified_at FROM users WHERE email = ? AND deleted_at IS NULL',
+    'SELECT id, email, language, email_verified_at FROM users WHERE email = ? AND deleted_at IS NULL',
     [email.trim().toLowerCase()],
   )
   if (!user) throw new AppError('NOT_FOUND', 'User not found', 404)
@@ -133,51 +140,63 @@ router.post('/resend-verification', asyncHandler(async (req, res) => {
   }
 
   const code = await createEmailVerification(user.id)
-  await sendVerificationEmail(user.email, code)
+  const lang = normalizeLang(language || user.language)
+  await sendVerificationEmail(user.email, code, { lang })
   res.json({ message: 'Verification code resent' })
 }))
 
 router.post('/forgot-password', asyncHandler(async (req, res) => {
-  const { email } = req.body
+  const { email, language } = req.body
   if (!email || !isValidEmail(email)) {
     throw new AppError('VALIDATION_ERROR', 'Valid email required')
   }
   const normalized = email.trim().toLowerCase()
   const user = await queryOne(
-    'SELECT id, email FROM users WHERE email = ? AND deleted_at IS NULL',
+    'SELECT id, email, language FROM users WHERE email = ? AND deleted_at IS NULL',
     [normalized],
   )
   if (user) {
-    const rawToken = crypto.randomBytes(32).toString('hex')
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex')
+    const code = generateCode()
+    const tokenHash = hashResetCode(code)
     const id = uuidv4()
     await query('DELETE FROM user_password_resets WHERE user_id = ?', [user.id])
     await query(
       `INSERT INTO user_password_resets (id, user_id, token_hash, expires_at, created_at)
-       VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL 60 MINUTE), NOW())`,
-      [id, user.id, tokenHash],
+       VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? MINUTE), NOW())`,
+      [id, user.id, tokenHash, RESET_CODE_TTL_MINUTES],
     )
-    const base = process.env.FRONTEND_URL || process.env.ADMIN_PANEL_URL || 'http://localhost:5173'
-    const resetLink = `${base.replace(/\/$/, '')}/reset-password?token=${rawToken}`
-    await sendPasswordResetEmail(user.email, resetLink, 60)
+    const lang = normalizeLang(language || user.language)
+    await sendPasswordResetEmail(user.email, code, {
+      ttlMinutes: RESET_CODE_TTL_MINUTES,
+      lang,
+    })
   }
-  res.json({ message: 'If the email exists, a reset link was sent' })
+  res.json({ message: 'If the email exists, a reset code was sent' })
 }))
 
 router.post('/reset-password', asyncHandler(async (req, res) => {
-  const { token, password } = req.body
-  if (!token || !password) {
-    throw new AppError('VALIDATION_ERROR', 'token and password required')
+  const { email, code, password, token } = req.body
+  const rawCode = code || token
+  if (!email || !rawCode || !password) {
+    throw new AppError('VALIDATION_ERROR', 'email, code and password required')
   }
+  if (!isValidEmail(email)) throw new AppError('VALIDATION_ERROR', 'Valid email required')
   assertStrongPassword(password)
-  const tokenHash = crypto.createHash('sha256').update(String(token)).digest('hex')
+
+  const user = await queryOne(
+    'SELECT id FROM users WHERE email = ? AND deleted_at IS NULL',
+    [email.trim().toLowerCase()],
+  )
+  if (!user) throw new AppError('VALIDATION_ERROR', 'Invalid or expired reset code', 400)
+
+  const tokenHash = hashResetCode(rawCode)
   const row = await queryOne(
     `SELECT id, user_id FROM user_password_resets
-     WHERE token_hash = ? AND used_at IS NULL AND expires_at > NOW()
+     WHERE user_id = ? AND token_hash = ? AND used_at IS NULL AND expires_at > NOW()
      ORDER BY created_at DESC LIMIT 1`,
-    [tokenHash],
+    [user.id, tokenHash],
   )
-  if (!row) throw new AppError('VALIDATION_ERROR', 'Invalid or expired reset link', 400)
+  if (!row) throw new AppError('VALIDATION_ERROR', 'Invalid or expired reset code', 400)
 
   const password_hash = await bcrypt.hash(password, 10)
   await query('UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?', [password_hash, row.user_id])
@@ -286,18 +305,14 @@ router.post('/refresh', asyncHandler(async (req, res) => {
   res.json(tokens)
 }))
 
-router.get('/me', authenticate, asyncHandler(async (req, res) => {
-  const cacheKey = `auth:me:${req.user.sub}`
-  const cached = await cacheGet(cacheKey)
-  if (cached) return res.json(cached)
-
+async function buildMePayload(userId) {
   const user = await queryOne(
     `SELECT u.id, u.email, u.full_name, u.role, u.language, u.company_group_id, u.can_assign_engineers,
             u.email_verified_at, u.created_at, cg.name AS company_group_name
      FROM users u
      LEFT JOIN company_groups cg ON cg.id = u.company_group_id
      WHERE u.id = ? AND u.deleted_at IS NULL`,
-    [req.user.sub],
+    [userId],
   )
   if (!user) throw new AppError('NOT_FOUND', 'User not found', 404)
 
@@ -305,10 +320,33 @@ router.get('/me', authenticate, asyncHandler(async (req, res) => {
   if (user.role === 'engineer') {
     project_ids = await getUserProjectIds(user.id)
   }
+  return { ...user, project_ids }
+}
 
-  const payload = { ...user, project_ids }
+router.get('/me', authenticate, asyncHandler(async (req, res) => {
+  const cacheKey = `auth:me:${req.user.sub}`
+  const cached = await cacheGet(cacheKey)
+  if (cached) return res.json(cached)
+
+  const payload = await buildMePayload(req.user.sub)
   await cacheSet(cacheKey, payload, 60)
   res.json(payload)
+}))
+
+/** Update current user's language (UI lang switcher sync). */
+router.patch('/me', authenticate, asyncHandler(async (req, res) => {
+  const { language } = req.body
+  if (language === undefined) {
+    throw new AppError('VALIDATION_ERROR', 'No fields to update')
+  }
+  const lang = normalizeLang(language)
+  await query(
+    'UPDATE users SET language = ?, updated_at = NOW() WHERE id = ? AND deleted_at IS NULL',
+    [lang, req.user.sub],
+  )
+  await cacheDel(`auth:me:${req.user.sub}`)
+  await invalidateResource('users', req.user.sub)
+  res.json(await buildMePayload(req.user.sub))
 }))
 
 export default router

@@ -75,8 +75,11 @@ function toBuffer(body) {
   return Buffer.from(String(body))
 }
 
-/** PutObject (small) or multipart Upload (large) — always sends Buffer + ContentLength. */
-export async function uploadObject(key, body, contentType) {
+/**
+ * PutObject (small) or multipart Upload (large) — always sends Buffer + ContentLength.
+ * @param {(loadedBytes: number) => void} [onProgress] bytes sent so far for this object
+ */
+export async function uploadObject(key, body, contentType, onProgress) {
   if (!s3Enabled()) {
     throw new Error('S3 is not configured')
   }
@@ -97,10 +100,12 @@ export async function uploadObject(key, body, contentType) {
       partSize: 8 * 1024 * 1024,
       leavePartsOnError: false,
     })
+    if (onProgress) upload.on('httpUploadProgress', (p) => onProgress(p.loaded ?? 0))
     await upload.done()
   } else {
     await getClient().send(new PutObjectCommand(params))
   }
+  onProgress?.(buf.length)
 
   return { key, publicUrl: s3PublicUrl(key) }
 }

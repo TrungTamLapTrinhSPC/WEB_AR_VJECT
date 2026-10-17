@@ -109,7 +109,7 @@ export default function Bim() {
                     fallback={previewFallback}
                   />
                   <div className="absolute top-2.5 left-2.5 flex gap-1.5">
-                    <span className="chip chip-blue bg-[rgba(227,242,253,.95)]">{disciplineLabel(b)}</span>
+                    <span className="chip chip-blue bg-[rgba(227,242,253,.95)]">{disciplineLabel(b, t)}</span>
                     <span className="chip chip-green bg-[rgba(220,252,231,.95)]">{b.version}</span>
                   </div>
                 </div>

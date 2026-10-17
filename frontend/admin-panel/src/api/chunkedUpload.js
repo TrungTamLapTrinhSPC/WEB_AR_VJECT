@@ -1,17 +1,17 @@
-import { API_BASE, getTokens, ApiError, refreshAccessToken } from './client.js'
+import { API_BASE, getTokens, ApiError, refreshAccessToken, safeFetch } from './client.js'
 
 async function authFetch(url, options = {}) {
   const { access } = getTokens()
   const headers = { ...options.headers }
   if (access) headers.Authorization = `Bearer ${access}`
 
-  let res = await fetch(url, { ...options, headers })
+  let res = await safeFetch(url, { ...options, headers })
 
   if (res.status === 401 && access) {
     const newToken = await refreshAccessToken()
     if (newToken) {
       headers.Authorization = `Bearer ${newToken}`
-      res = await fetch(url, { ...options, headers })
+      res = await safeFetch(url, { ...options, headers })
     }
   }
 
@@ -66,11 +66,7 @@ export async function uploadIfcFileInChunks(file, { onProgress, createSession })
 
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      throw new ApiError(
-        data.error?.code || 'ERROR',
-        data.error?.message || res.statusText,
-        res.status,
-      )
+      throw ApiError.fromResponse(res, data)
     }
 
     loaded += blob.size
@@ -79,7 +75,7 @@ export async function uploadIfcFileInChunks(file, { onProgress, createSession })
     await new Promise((r) => { requestAnimationFrame(() => r()) })
   }
 
-  emit('processing', { percent: 100, etaSeconds: null, loaded: total })
+  emit('processing', { percent: 0, stage: 'queued', etaSeconds: null, loaded: total })
   return uploadId
 }
 

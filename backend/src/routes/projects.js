@@ -1,4 +1,6 @@
 import { Router } from 'express'
+import path from 'path'
+import multer from 'multer'
 import { v4 as uuidv4 } from 'uuid'
 import { query, queryOne } from '../db/pool.js'
 import { config } from '../config/index.js'
@@ -11,12 +13,23 @@ import {
   buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
 } from '../utils/cursor.js'
 import {
-  cacheGet, cacheSet, hashFilters, invalidateResource,
+  cacheGet, cacheSet, listCacheKey, invalidateResource,
 } from '../utils/cache.js'
-import { ensureModelsProjectFolder, isS3Configured } from '../utils/s3.js'
+import { ensureModelsProjectFolder, isS3Configured, uploadObject } from '../utils/s3.js'
 import { notifyProjectAssignment } from '../utils/notify.js'
 
 const router = Router()
+
+const coverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!/^image\/(jpeg|png|webp)$/i.test(file.mimetype || '')) {
+      return cb(new AppError('VALIDATION_ERROR', 'Cover must be JPEG, PNG or WebP'))
+    }
+    return cb(null, true)
+  },
+})
 
 async function listProjects(req, res) {
   const limit = clampLimit(req.query.limit)
@@ -36,7 +49,7 @@ async function listProjects(req, res) {
     status, search, company_group_id, start_date_from, start_date_to,
     end_date_from, end_date_to, attribute_group_id, cursor, limit, userId, role,
   }
-  const cacheKey = `projects:list:${hashFilters(filters)}`
+  const cacheKey = await listCacheKey('projects', filters)
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 
@@ -100,7 +113,7 @@ async function listProjects(req, res) {
   params.push(...cursorParams, limit + 1)
 
   const rows = await query(
-    `SELECT p.id, p.name, p.address, p.status, p.start_date, p.end_date, p.created_at, p.updated_at,
+    `SELECT p.id, p.name, p.address, p.status, p.start_date, p.end_date, p.cover_image_url, p.created_at, p.updated_at,
             (SELECT COUNT(*) FROM qr_markers q WHERE q.project_id = p.id AND q.deleted_at IS NULL) AS qr_count,
             (SELECT COUNT(*) FROM bim_models b WHERE b.project_id = p.id AND b.deleted_at IS NULL) AS bim_count,
             (SELECT COUNT(*) FROM feedbacks f
@@ -238,22 +251,81 @@ router.post('/', requireRole('admin'), asyncHandler(async (req, res) => {
 }))
 
 router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
-  const { name, address, status, start_date, end_date } = req.body
+  const { name, address, status, start_date, end_date, cover_image_url } = req.body
   const existing = await queryOne('SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL', [req.params.id])
   if (!existing) throw new AppError('NOT_FOUND', 'Project not found', 404)
 
-  await query(
-    `UPDATE projects SET
-       name = COALESCE(?, name), address = COALESCE(?, address), status = COALESCE(?, status),
-       start_date = COALESCE(?, start_date), end_date = COALESCE(?, end_date),
-       updated_at = NOW()
-     WHERE id = ?`,
-    [name ?? null, address ?? null, status ?? null, start_date ?? null, end_date ?? null, req.params.id],
-  )
+  const sets = []
+  const params = []
+  if (name !== undefined) { sets.push('name = ?'); params.push(String(name).trim() || null) }
+  if (address !== undefined) { sets.push('address = ?'); params.push(address ? String(address).trim() : null) }
+  if (status !== undefined) {
+    if (!['active', 'completed', 'archived'].includes(status)) {
+      throw new AppError('VALIDATION_ERROR', 'status must be active or completed')
+    }
+    sets.push('status = ?')
+    params.push(status)
+  }
+  if (start_date !== undefined) { sets.push('start_date = ?'); params.push(start_date || null) }
+  if (end_date !== undefined) { sets.push('end_date = ?'); params.push(end_date || null) }
+  if (cover_image_url !== undefined) {
+    sets.push('cover_image_url = ?')
+    params.push(cover_image_url ? String(cover_image_url).trim() : null)
+  }
+  if (!sets.length) throw new AppError('VALIDATION_ERROR', 'No fields to update')
+  if (name !== undefined && !String(name).trim()) {
+    throw new AppError('VALIDATION_ERROR', 'name is required')
+  }
+
+  sets.push('updated_at = NOW()')
+  params.push(req.params.id)
+  await query(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`, params)
 
   await invalidateResource('projects', req.params.id)
   res.json(await queryOne('SELECT * FROM projects WHERE id = ?', [req.params.id]))
 }))
+
+/** Upload cover image via API → S3 (avoids browser CORS / bucket prefix 403 on presigned PUT). */
+router.post(
+  '/:id/cover',
+  requireRole('admin'),
+  (req, res, next) => {
+    coverUpload.single('cover')(req, res, (err) => {
+      if (!err) return next()
+      if (err instanceof AppError) return next(err)
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return next(new AppError('VALIDATION_ERROR', 'Cover image too large (max 8MB)', 413))
+      }
+      return next(new AppError('VALIDATION_ERROR', err.message || 'Upload failed', 400))
+    })
+  },
+  asyncHandler(async (req, res) => {
+    if (!isS3Configured()) {
+      throw new AppError('SERVICE_UNAVAILABLE', 'S3 chưa được cấu hình trên server', 503)
+    }
+    const existing = await queryOne(
+      'SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL',
+      [req.params.id],
+    )
+    if (!existing) throw new AppError('NOT_FOUND', 'Project not found', 404)
+    if (!req.file?.buffer?.length) {
+      throw new AppError('VALIDATION_ERROR', 'cover file required')
+    }
+
+    const ext = path.extname(req.file.originalname || '').toLowerCase()
+      || (req.file.mimetype === 'image/png' ? '.png'
+        : req.file.mimetype === 'image/webp' ? '.webp' : '.jpg')
+    const key = `uploads/project-covers/${req.params.id}/${uuidv4()}${ext}`
+    const up = await uploadObject(key, req.file.buffer, req.file.mimetype || 'image/jpeg')
+
+    await query(
+      'UPDATE projects SET cover_image_url = ?, updated_at = NOW() WHERE id = ?',
+      [up.publicUrl, req.params.id],
+    )
+    await invalidateResource('projects', req.params.id)
+    res.json(await queryOne('SELECT * FROM projects WHERE id = ?', [req.params.id]))
+  }),
+)
 
 router.post('/:id/team', requireRole('admin', 'bql'), asyncHandler(async (req, res) => {
   await assertCanAssignEngineers(req.user.sub, req.user.role)

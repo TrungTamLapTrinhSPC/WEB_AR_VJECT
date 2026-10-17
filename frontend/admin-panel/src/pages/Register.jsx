@@ -80,7 +80,7 @@ export default function Register() {
   const handleResend = async () => {
     setError('')
     try {
-      await resendVerification(registeredEmail)
+      await resendVerification(registeredEmail, lang)
       setError('')
       alert(t('verify_resent'))
     } catch (err) {

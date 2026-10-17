@@ -77,12 +77,15 @@ export default function FeedbackProjectModelFields({
   )
 
   const modelOptions = useMemo(
-    () => models.map((m) => ({
-      id: m.id,
-      label: m.name,
-      hint: `v${m.version}${disciplineLabel(m) !== '—' ? ` · ${disciplineLabel(m)}` : ''}`,
-    })),
-    [models],
+    () => models.map((m) => {
+      const disc = disciplineLabel(m, t)
+      return {
+        id: m.id,
+        label: m.name,
+        hint: `v${m.version}${disc !== '—' ? ` · ${disc}` : ''}`,
+      }
+    }),
+    [models, t],
   )
 
   return (

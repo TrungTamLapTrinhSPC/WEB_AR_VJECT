@@ -4,15 +4,15 @@ import { parseJson } from './helpers'
 export function getBimPreviewUrls(record) {
   const files = parseJson(record?.model_files, {}) || {}
   const meta = parseJson(record?.metadata, {}) || {}
-  if (Array.isArray(files.preview_urls) && files.preview_urls.length) {
-    return files.preview_urls.filter(Boolean)
+  const urls = []
+  const push = (u) => {
+    if (u && !urls.includes(u)) urls.push(u)
   }
-  if (files.preview_url) return [files.preview_url]
-  if (Array.isArray(meta.preview_urls) && meta.preview_urls.length) {
-    return meta.preview_urls.filter(Boolean)
-  }
-  if (files.thumbnail_url) return [files.thumbnail_url]
-  return []
+  if (Array.isArray(files.preview_urls)) files.preview_urls.forEach(push)
+  push(files.preview_url)
+  if (Array.isArray(meta.preview_urls)) meta.preview_urls.forEach(push)
+  push(files.thumbnail_url)
+  return urls
 }
 
 export function getBimFirstPreviewUrl(record) {

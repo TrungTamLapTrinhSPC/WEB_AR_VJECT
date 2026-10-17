@@ -22,7 +22,7 @@ const [rows] = await conn.query(`
   FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE()
     AND TABLE_NAME IN ('feedbacks', 'users', 'projects', 'qr_markers')
-    AND COLUMN_NAME IN ('id', 'status', 'qr_image_url', 'start_date', 'expires_at')
+    AND COLUMN_NAME IN ('id', 'status', 'qr_image_url', 'start_date', 'expires_at', 'rotation_angle')
   ORDER BY TABLE_NAME, COLUMN_NAME
 `)
 console.table(rows)

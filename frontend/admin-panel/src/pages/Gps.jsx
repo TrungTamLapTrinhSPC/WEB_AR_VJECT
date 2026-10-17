@@ -43,10 +43,10 @@ export default function Gps() {
   useEffect(() => { load() }, [load, dataVersion])
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Xóa POI này?')) return
+    if (!window.confirm(t('gps_delete_confirm'))) return
     try {
       await deleteGpsPoi(id)
-      toast('success', t('deleted') || 'Đã xóa')
+      toast('success', t('deleted'))
       if (focusId === id) setFocusId(null)
       refreshData()
     } catch (err) {

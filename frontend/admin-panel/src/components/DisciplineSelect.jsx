@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react'
 import { fetchDisciplines } from '../api/disciplines'
+import { useI18n } from '../context/I18nContext'
+import { disciplineName } from '../utils/disciplineLabel'
 
 const FALLBACK = [
-  { id: 1, code: 'architecture', name: 'Kiến trúc' },
-  { id: 2, code: 'structure', name: 'Kết cấu' },
-  { id: 3, code: 'plumbing', name: 'Cấp thoát nước' },
-  { id: 4, code: 'electrical', name: 'Điện' },
-  { id: 5, code: 'hvac', name: 'Thông gió - Điều hòa' },
-  { id: 6, code: 'other', name: 'Khác' },
+  { id: 1, code: 'architecture' },
+  { id: 2, code: 'structure' },
+  { id: 3, code: 'plumbing' },
+  { id: 4, code: 'electrical' },
+  { id: 5, code: 'hvac' },
+  { id: 6, code: 'other' },
 ]
 
 /** Select bộ môn BIM — `value` = code (gửi API qua `discipline`). */
@@ -19,6 +21,7 @@ export default function DisciplineSelect({
   required = false,
   id,
 }) {
+  const { t } = useI18n()
   const [list, setList] = useState(FALLBACK)
 
   useEffect(() => {
@@ -40,7 +43,7 @@ export default function DisciplineSelect({
     >
       {list.map((d) => (
         <option key={d.id ?? d.code} value={d.code}>
-          {d.name}
+          {disciplineName(d.code, d.name, t)}
         </option>
       ))}
     </select>

@@ -24,11 +24,13 @@ export default function UploadDonut({
   t,
 }) {
   const isProcessing = phase === 'processing'
-  const p = isProcessing ? 100 : Math.min(100, Math.max(0, percent))
+  /** Spinner only while waiting in the server queue; otherwise show real percent. */
+  const indeterminate = isProcessing && (percent == null || percent <= 0)
+  const p = Math.min(100, Math.max(0, percent ?? 0))
   const r = 42
   const c = 2 * Math.PI * r
   const offset = c - (p / 100) * c
-  const arc = isProcessing ? c * 0.28 : c
+  const arc = c * 0.28
 
   return (
     <div className="upload-donut-panel">
@@ -37,23 +39,28 @@ export default function UploadDonut({
           <svg className="upload-donut" viewBox="0 0 100 100" aria-hidden>
             <circle className="upload-donut-track" cx="50" cy="50" r={r} />
             <circle
-              className={`upload-donut-fill${isProcessing ? ' is-processing' : ''}`}
+              className={`upload-donut-fill${indeterminate ? ' is-processing' : ''}`}
               cx="50"
               cy="50"
               r={r}
-              strokeDasharray={isProcessing ? `${arc} ${c - arc}` : c}
-              strokeDashoffset={isProcessing ? 0 : offset}
+              strokeDasharray={indeterminate ? `${arc} ${c - arc}` : c}
+              strokeDashoffset={indeterminate ? 0 : offset}
             />
           </svg>
           <div className="upload-donut-center">
-            <span className="upload-donut-pct">{isProcessing ? '…' : `${Math.round(p)}%`}</span>
+            <span className="upload-donut-pct">{indeterminate ? '…' : `${Math.round(p)}%`}</span>
           </div>
         </div>
         <div className="upload-donut-meta">
           <div className="upload-donut-label">{label}</div>
           {sublabel && <div className="upload-donut-sub">{sublabel}</div>}
+          {isProcessing && (
+            <div className="upload-donut-bar" aria-hidden>
+              <div className="upload-donut-bar-fill" style={{ width: `${p}%` }} />
+            </div>
+          )}
           <div className="upload-donut-eta">
-            {isProcessing
+            {indeterminate
               ? t('bu_upload_eta_process')
               : formatUploadEta(etaSeconds, t)}
           </div>

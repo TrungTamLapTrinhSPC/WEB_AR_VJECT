@@ -55,11 +55,6 @@ function QrThumb({ markerId, url }) {
   )
 }
 
-function markerTypeLabel(t, type) {
-  if (type === 'tabletop') return t('qr_type_tabletop')
-  return t('qr_type_field')
-}
-
 export default function Qr() {
   const { t } = useI18n()
   const { openModal, toast, dataVersion, refreshData } = useApp()
@@ -70,8 +65,6 @@ export default function Qr() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [projectId, setProjectId] = useState('')
-  const [markerType, setMarkerType] = useState('')
-
   const hadItemsRef = useRef(false)
 
   const load = useCallback(async ({ silent = false } = {}) => {
@@ -80,7 +73,6 @@ export default function Qr() {
       const params = { limit: 50 }
       if (search) params.search = search
       if (projectId) params.project_id = projectId
-      if (markerType) params.marker_type = markerType
       const res = await fetchQrMarkers(params)
       const next = res.data || []
       setItems(next)
@@ -91,7 +83,7 @@ export default function Qr() {
     } finally {
       if (!silent) setLoading(false)
     }
-  }, [search, projectId, markerType])
+  }, [search, projectId])
 
   useEffect(() => {
     load({ silent: hadItemsRef.current })
@@ -118,7 +110,7 @@ export default function Qr() {
     if (!window.confirm(t('qr_delete_confirm'))) return
     try {
       await deleteQrMarker(id)
-      toast('success', t('deleted') || 'Đã xóa')
+      toast('success', t('deleted'))
       refreshData()
     } catch (err) {
       toast('err', err.message)
@@ -144,15 +136,6 @@ export default function Qr() {
         </div>
       ),
     },
-    {
-      id: 'type',
-      label: t('qr_marker_type'),
-      render: (q) => (
-        <span className={`chip ${q.marker_type === 'tabletop' ? 'chip-blue' : 'chip-gray'}`}>
-          {markerTypeLabel(t, q.marker_type)}
-        </span>
-      ),
-    },
     { id: 'project', label: t('qr_project'), render: (q) => q.project_name },
     { id: 'floor', label: t('qr_floor'), render: (q) => q.floor_level || '—' },
     {
@@ -163,15 +146,17 @@ export default function Qr() {
       render: (q) => `${q.bim_pos_x}, ${q.bim_pos_y}, ${q.bim_pos_z}`,
     },
     {
+      id: 'rotation',
+      label: t('qr_rotation'),
+      className: 'font-mono text-xs text-text-muted',
+      hideOnMobile: true,
+      render: (q) => (q.rotation_angle != null ? `${q.rotation_angle}°` : '—'),
+    },
+    {
       id: 'size',
       label: t('qr_size'),
       hideOnMobile: true,
-      render: (q) => {
-        if (q.marker_type === 'tabletop' && q.paper_size) {
-          return `${q.paper_size} · ${q.tabletop_scale ?? '—'}`
-        }
-        return q.physical_width_m ? `${Math.round(q.physical_width_m * 100)}cm` : '—'
-      },
+      render: (q) => (q.physical_width_m ? `${Math.round(q.physical_width_m * 100)}cm` : '—'),
     },
     {
       id: 'installed',
@@ -205,11 +190,6 @@ export default function Qr() {
           {projects.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
-        </select>
-        <select className="select" value={markerType} onChange={(e) => setMarkerType(e.target.value)}>
-          <option value="">{t('qr_all_types')}</option>
-          <option value="field">{t('qr_type_field')}</option>
-          <option value="tabletop">{t('qr_type_tabletop')}</option>
         </select>
         <button type="button" className="btn" onClick={load}><Icon name="refresh" size={14} /> {t('refresh')}</button>
       </div>

@@ -7,7 +7,7 @@ import { requireRole } from '../middleware/auth.js'
 import {
   buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
 } from '../utils/cursor.js'
-import { cacheGet, cacheSet, hashFilters, invalidateResource, cacheDel } from '../utils/cache.js'
+import { cacheGet, cacheSet, listCacheKey, invalidateResource, cacheDel } from '../utils/cache.js'
 import { notifyFeedbackComment } from '../utils/notify.js'
 
 const router = Router()
@@ -65,7 +65,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const cursor = req.query.cursor
   if (cursor && !decodeCursor(cursor)) throw new AppError('VALIDATION_ERROR', 'Invalid cursor')
 
-  const cacheKey = `feedbacks:list:${hashFilters({ status, priority, user_id, search, project_id, cursor, limit })}`
+  const cacheKey = await listCacheKey('feedbacks', { status, priority, user_id, search, project_id, cursor, limit })
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 

@@ -7,7 +7,7 @@ import { requireRole } from '../middleware/auth.js'
 import {
   buildCursorClause, clampLimit, paginatedResponse, decodeCursor,
 } from '../utils/cursor.js'
-import { cacheGet, cacheSet, hashFilters, invalidateResource } from '../utils/cache.js'
+import { cacheGet, cacheSet, hashFilters, listCacheKey, invalidateResource } from '../utils/cache.js'
 
 const router = Router()
 
@@ -52,7 +52,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const cursor = req.query.cursor
   if (cursor && !decodeCursor(cursor)) throw new AppError('VALIDATION_ERROR', 'Invalid cursor')
 
-  const cacheKey = `gps-pois:list:${hashFilters({ model_id, project_id, type, search, cursor, limit })}`
+  const cacheKey = await listCacheKey('gps-pois', { model_id, project_id, type, search, cursor, limit })
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 

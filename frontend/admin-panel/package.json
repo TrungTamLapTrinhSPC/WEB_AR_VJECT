@@ -9,7 +9,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "screenshots": "node scripts/capture-feature-screenshots.mjs"
+    "screenshots": "node scripts/capture-feature-screenshots.mjs",
+    "i18n:audit": "node scripts/i18n-audit.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

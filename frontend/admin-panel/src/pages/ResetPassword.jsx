@@ -8,7 +8,8 @@ import PasswordInput from '../components/PasswordInput'
 export default function ResetPassword() {
   const { t } = useI18n()
   const [params] = useSearchParams()
-  const token = params.get('token') || ''
+  const [email, setEmail] = useState(params.get('email') || '')
+  const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
@@ -16,14 +17,19 @@ export default function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!token) {
-      setError(t('reset_missing_token'))
+    const trimmedCode = code.trim()
+    if (!/^\d{6}$/.test(trimmedCode)) {
+      setError(t('reset_code_invalid'))
+      return
+    }
+    if (!email.trim()) {
+      setError(t('reset_email_required'))
       return
     }
     setError('')
     setSubmitting(true)
     try {
-      await resetPassword(token, password)
+      await resetPassword({ email: email.trim(), code: trimmedCode, password })
       setDone(true)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('login_failed'))
@@ -43,6 +49,31 @@ export default function ResetPassword() {
         <p className="text-sm">{t('reset_done')}</p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="form-label">Email</label>
+            <input
+              type="email"
+              className="form-input"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form-label">{t('reset_code')}</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="\d{6}"
+              maxLength={6}
+              className="form-input font-mono tracking-widest text-lg"
+              required
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              placeholder="000000"
+              autoComplete="one-time-code"
+            />
+          </div>
           <div>
             <label className="form-label">{t('password')}</label>
             <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />

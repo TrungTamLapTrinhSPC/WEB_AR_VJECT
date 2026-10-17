@@ -5,7 +5,7 @@ import { config } from '../config/index.js'
 import { asyncHandler, AppError } from '../middleware/errorHandler.js'
 import { requireRole } from '../middleware/auth.js'
 import { clampLimit, paginatedResponse } from '../utils/cursor.js'
-import { cacheGet, cacheSet, hashFilters, invalidateResource } from '../utils/cache.js'
+import { cacheGet, cacheSet, listCacheKey, invalidateResource } from '../utils/cache.js'
 
 const router = Router()
 
@@ -17,7 +17,7 @@ router.get('/', asyncHandler(async (req, res) => {
   const limit = clampLimit(req.query.limit, 100, 50)
   const { model_id, search, discipline } = req.query
 
-  const cacheKey = `elements:list:${hashFilters({ model_id, search, discipline, limit })}`
+  const cacheKey = await listCacheKey('elements', { model_id, search, discipline, limit })
   const cached = await cacheGet(cacheKey)
   if (cached) return res.json(cached)
 

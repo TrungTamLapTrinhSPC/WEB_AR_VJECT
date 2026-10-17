@@ -9,12 +9,12 @@ export async function login(email, password, rememberMe = false) {
   return data
 }
 
-export async function forgotPassword(email) {
-  return publicPost('/auth/forgot-password', { email })
+export async function forgotPassword(email, language) {
+  return publicPost('/auth/forgot-password', { email, language })
 }
 
-export async function resetPassword(token, password) {
-  return publicPost('/auth/reset-password', { token, password })
+export async function resetPassword({ email, code, password }) {
+  return publicPost('/auth/reset-password', { email, code, password })
 }
 
 export async function changePassword(currentPassword, password) {
@@ -34,8 +34,8 @@ export async function verifyEmail(email, code) {
   return data
 }
 
-export async function resendVerification(email) {
-  return publicPost('/auth/resend-verification', { email })
+export async function resendVerification(email, language) {
+  return publicPost('/auth/resend-verification', { email, language })
 }
 
 export async function logout() {
@@ -48,6 +48,13 @@ export async function logout() {
 
 export async function getMe() {
   return apiFetch('/auth/me')
+}
+
+export async function updateMyLanguage(language) {
+  return apiFetch('/auth/me', {
+    method: 'PATCH',
+    body: JSON.stringify({ language }),
+  })
 }
 
 export async function fetchPasswordPolicy() {

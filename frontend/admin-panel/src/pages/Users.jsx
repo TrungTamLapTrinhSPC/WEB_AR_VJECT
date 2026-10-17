@@ -63,7 +63,7 @@ export default function Users() {
     if (!window.confirm(t('user_delete_confirm'))) return
     try {
       await deleteUser(id)
-      toast('success', t('deleted') || 'Đã xóa')
+      toast('success', t('deleted'))
       refreshData()
       load()
     } catch (err) {

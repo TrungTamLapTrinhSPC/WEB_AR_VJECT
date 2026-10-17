@@ -19,8 +19,9 @@ export function ifcToYUp(x, y, z) {
 }
 
 export function applyRtcAndYUp(x, y, z, rtc) {
-  const vx = x - rtc[0]
-  const vy = y - rtc[1]
-  const vz = z - rtc[2]
-  return ifcToYUp(vx, vy, vz)
+  return {
+    x: x - rtc[0],
+    y: y - rtc[1],
+    z: z - rtc[2],
+  }
 }
