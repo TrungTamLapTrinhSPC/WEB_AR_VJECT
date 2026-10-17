@@ -32,6 +32,18 @@ export function updateProject(id, body) {
   return apiFetch(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) })
 }
 
+export function fetchProjectOrigin(id) {
+  return apiFetch(`/projects/${id}/origin`)
+}
+
+export function saveProjectOrigin(id, body) {
+  return apiFetch(`/projects/${id}/origin`, { method: 'PUT', body: JSON.stringify(body) })
+}
+
+export function clearProjectOrigin(id) {
+  return apiFetch(`/projects/${id}/origin`, { method: 'DELETE' })
+}
+
 /** Upload project cover via backend (multipart) — avoids S3 browser PUT 403/CORS. */
 export async function uploadProjectCover(projectId, file) {
   const fd = new FormData()

@@ -13,6 +13,7 @@ import {
 import { fetchCompanyGroups, fetchCompanyGroup, createCompanyGroup, updateCompanyGroup } from '../api/companyGroups'
 import { fetchProjectAttributeGroups } from '../api/projectAttributeGroups'
 import CompanyGroupAssign from './CompanyGroupAssign'
+import ProjectOriginPanel from './ProjectOriginPanel'
 import CompanyGroupField from './CompanyGroupField'
 import S3Image from './S3Image'
 import FeedbackImagesField from './FeedbackImagesField'
@@ -2222,7 +2223,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
   const memberBoxRef = useRef(null)
   const memberSearchTimer = useRef(null)
   const projectId = modalData?.id
-  const projectTabs = ['info', 'team', 'qr', 'bim', 'feedback', 'gps']
+  const projectTabs = ['info', 'team', 'qr', 'bim', 'feedback', 'gps', 'origin']
 
   const syncEditForm = useCallback((p) => {
     if (!p) return
@@ -2544,6 +2545,7 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
                   { id: 'bim', label: t('prj_tab_bim') },
                   { id: 'feedback', label: t('prj_tab_fb') },
                   { id: 'gps', label: t('prj_tab_gps') },
+                  { id: 'origin', label: t('prj_tab_origin') },
                 ].map(({ id, label }) => (
                   <button
                     key={id}
@@ -2789,6 +2791,15 @@ function ProjectModal({ activeModal, modalData, closeModal, toast, t, refreshPro
                 </ul>
                 )}
               </>
+            )}
+            {tab === 'origin' && projectId && (
+              <ProjectOriginPanel
+                projectId={projectId}
+                canEdit={isAdmin}
+                t={t}
+                toast={toast}
+                onSaved={refreshProjects}
+              />
             )}
             {tab === 'gps' && (
               assetLoading ? (

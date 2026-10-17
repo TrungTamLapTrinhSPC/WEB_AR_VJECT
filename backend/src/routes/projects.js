@@ -17,6 +17,7 @@ import {
 } from '../utils/cache.js'
 import { ensureModelsProjectFolder, isS3Configured, uploadObject } from '../utils/s3.js'
 import { notifyProjectAssignment } from '../utils/notify.js'
+import { parseOriginInput } from '../utils/projectOrigin.js'
 
 const router = Router()
 
@@ -281,6 +282,75 @@ router.patch('/:id', requireRole('admin'), asyncHandler(async (req, res) => {
   params.push(req.params.id)
   await query(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`, params)
 
+  await invalidateResource('projects', req.params.id)
+  res.json(await queryOne('SELECT * FROM projects WHERE id = ?', [req.params.id]))
+}))
+
+/**
+ * Hồ sơ trắc địa RTK của dự án (bảng `project_georef`, do backend app tạo), hoặc
+ * null. Bảng chưa có trên CSDL này thì coi như chưa có hồ sơ.
+ */
+async function findSurveyedGeoref(projectId) {
+  try {
+    return await queryOne(
+      'SELECT id, survey_date, surveyor, fix_quality, updated_at FROM project_georef WHERE project_id = ?',
+      [projectId],
+    )
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE') return null
+    throw err
+  }
+}
+
+router.get('/:id/origin', asyncHandler(async (req, res) => {
+  await assertProjectAccess(req.user.sub, req.user.role, req.params.id)
+  const project = await queryOne(
+    `SELECT id, origin_lat, origin_lon, origin_alt, origin_bearing_deg
+     FROM projects WHERE id = ? AND deleted_at IS NULL`,
+    [req.params.id],
+  )
+  if (!project) throw new AppError('NOT_FOUND', 'Project not found', 404)
+  res.json({ ...project, survey: await findSurveyedGeoref(req.params.id) })
+}))
+
+/**
+ * Gốc toạ độ ƯỚC LƯỢNG (chấm trên bản đồ) — xem utils/projectOrigin.js.
+ *
+ * Dự án đã có hồ sơ RTK thì từ chối, trừ khi gửi `override_survey: true`:
+ * ghi đè số đo cm bằng một điểm chấm tay là mất độ chính xác mà không ai hay.
+ */
+router.put('/:id/origin', requireRole('admin'), asyncHandler(async (req, res) => {
+  const existing = await queryOne('SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL', [req.params.id])
+  if (!existing) throw new AppError('NOT_FOUND', 'Project not found', 404)
+
+  const { value, errors } = parseOriginInput(req.body)
+  if (errors.length) throw new AppError('VALIDATION_ERROR', errors.join('; '), 400, errors)
+
+  if (req.body.override_survey !== true && await findSurveyedGeoref(req.params.id)) {
+    throw new AppError('GEOREF_SURVEYED', 'Project already has an RTK survey georeference', 409)
+  }
+
+  await query(
+    `UPDATE projects
+     SET origin_lat = ?, origin_lon = ?, origin_alt = ?, origin_bearing_deg = ?, updated_at = NOW()
+     WHERE id = ?`,
+    [value.origin_lat, value.origin_lon, value.origin_alt, value.origin_bearing_deg, req.params.id],
+  )
+  await invalidateResource('projects', req.params.id)
+  res.json(await queryOne('SELECT * FROM projects WHERE id = ?', [req.params.id]))
+}))
+
+/** Gỡ gốc toạ độ: app quay về trạng thái "chưa có gốc" và không đặt mô hình ngoài trời. */
+router.delete('/:id/origin', requireRole('admin'), asyncHandler(async (req, res) => {
+  const existing = await queryOne('SELECT id FROM projects WHERE id = ? AND deleted_at IS NULL', [req.params.id])
+  if (!existing) throw new AppError('NOT_FOUND', 'Project not found', 404)
+
+  await query(
+    `UPDATE projects
+     SET origin_lat = NULL, origin_lon = NULL, origin_alt = NULL, origin_bearing_deg = 0, updated_at = NOW()
+     WHERE id = ?`,
+    [req.params.id],
+  )
   await invalidateResource('projects', req.params.id)
   res.json(await queryOne('SELECT * FROM projects WHERE id = ?', [req.params.id]))
 }))

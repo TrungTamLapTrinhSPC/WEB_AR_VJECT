@@ -381,6 +381,24 @@
   .gps-leaflet-badge-dot {
     @apply inline-block w-2.5 h-2.5 bg-warning rotate-45 mr-1.5 align-middle;
   }
+  .origin-map-wrap {
+    @apply relative w-full rounded-[10px] overflow-hidden border border-border;
+  }
+  .origin-map {
+    @apply w-full h-[320px] sm:h-[420px] z-0 cursor-crosshair;
+  }
+  .origin-pin {
+    background: transparent;
+    border: none;
+  }
+  .origin-pin-dot {
+    @apply flex items-center justify-center w-[30px] h-[30px] rounded-full text-white text-[11px] font-bold;
+    border: 3px solid #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+  }
+  .origin-axis-tip {
+    @apply block text-center font-bold text-[12px] leading-[18px] rounded bg-white/90 shadow;
+  }
   .leaflet-control-zoom {
     @apply border border-border rounded-lg overflow-hidden shadow-md;
   }
